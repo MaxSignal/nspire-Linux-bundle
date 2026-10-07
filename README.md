@@ -6,19 +6,22 @@ and zips the files to copy to the calculator. The CX II is not supported.
 
 | ZIP | Root filesystem |
 |---|---|
-| `nspire-linux-<kernel>.zip` | Minimal BusyBox system (initrd of about 250 KB) |
+| `nspire-linux-<kernel>.zip` | Minimal BusyBox system (initrd of about 300 KB) |
 | `nspire-openwrt-<version>-<kernel>.zip` | OpenWrt for the ARM926EJ-S (official at91/sam9x packages, put together by the official ImageBuilder), set up as a client |
 
 The `linux/` folder of a ZIP goes to `/documents/linux/` on the calculator.
 The two variants use different file names, so both can be installed side by
 side.
 
+Both variants reach the network through Ethernet over USB (`usb0`, CDC ECM
+or RNDIS) as a DHCP client: share the computer's connection with the
+calculator to get online. The minimal variant has `ip`, `udhcpc`, `ping`,
+`nslookup` and `wget` (HTTPS without certificate checks).
+
 The OpenWrt variant leaves out the router software (DHCP/DNS server,
-firewall, PPP, web interface). Its network link is Ethernet over USB
-(`usb0`, CDC ECM or RNDIS), configured as a DHCP client: share the
-computer's connection with the calculator to get online. The packages to
-leave out are listed in `OPENWRT_PACKAGES` (`scripts/versions.sh`), and the
-files changed for the TI-Nspire are in `openwrt/`.
+firewall, PPP, web interface). The packages to leave out are listed in
+`OPENWRT_PACKAGES` (`scripts/versions.sh`), and the files changed for the
+TI-Nspire are in `openwrt/`.
 
 ## Components
 
@@ -59,8 +62,10 @@ file in the TI-Nspire file browser and boot again.
 
 The GitHub Actions workflow (`.github/workflows/build.yml`) builds
 everything on every push, boots the result on the emulator and keeps the
-ZIPs as artifacts. Pushing a `v*` tag also creates a draft release with the
-ZIPs.
+ZIPs as artifacts. Builds of `main` replace the `latest` release, and
+pushing a `v*` tag creates a release of its own. Release notes
+(installation and use, versions, checksums) are made from
+`release/notes.md` by `scripts/release-notes.sh`.
 
 Locally:
 
@@ -72,6 +77,7 @@ scripts/build-openwrt.sh    # out/openwrt.cpio.gz (OpenWrt ImageBuilder: needs g
 scripts/build-loader.sh     # out/linuxloader2.tns (needs an Ubuntu 22.04 like system)
 scripts/boot-test.sh        # boot test on Firebird
 scripts/package.sh          # out/*.zip
+scripts/release-notes.sh    # out/release-notes.md
 ```
 
 `KERNEL_SRC` / `LOADER_SRC` select local source trees instead of cloning.

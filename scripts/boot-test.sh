@@ -92,14 +92,15 @@ for variant; do
 			rm -f "$T/$m.flash"
 			boot "$m-ram" $m "$initrd" "$T/$m.flash" 120 "" <<'SCRIPT'
 !wait nspire:~#
-uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; echo CHECK-$((40+2))
+uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; echo CHECK-$((40+2))
 !wait CHECK-42
 !delay 300
 !quit 0
 SCRIPT
 			if grep -a -q "^$REL" "$LOG" && grep -a -q "Unpacking initramfs" "$LOG" &&
 			   grep -a -q "rtc0" "$LOG" && grep -a -q "green:status" "$LOG" &&
-			   grep -a -q "^6$" "$LOG" && clean "$LOG"; then
+			   grep -a -q "^6$" "$LOG" && grep -a -q "^usb0:$" "$LOG" &&
+			   grep -a -q "^dhcp-client-running" "$LOG" && clean "$LOG"; then
 				pass "busybox $m from RAM"
 			else
 				fail "busybox $m from RAM" "$LOG"

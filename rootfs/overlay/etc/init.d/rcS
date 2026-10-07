@@ -9,3 +9,9 @@ mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
 hostname -F /etc/hostname
 model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
 echo "Linux $(uname -r) on ${model:-TI-Nspire}"
+# Network: Ethernet over USB to a computer, which shares its connection
+ip link set lo up
+if [ -d /sys/class/net/usb0 ]; then
+	ip link set usb0 up
+	udhcpc -i usb0 -b -x hostname:"$(hostname)" >/dev/null 2>&1
+fi

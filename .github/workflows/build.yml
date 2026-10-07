@@ -1,9 +1,10 @@
 name: Build
 
 # Builds the kernel, the root filesystems and the loader, boots them on the
-# Firebird emulator, and zips what goes onto the calculator. A tag v* also
-# creates a draft release with the ZIPs (the instructions go into the
-# release page).
+# Firebird emulator, and zips what goes onto the calculator. Builds of the
+# main branch replace the "latest" release, and a tag v* creates a release
+# of its own, with the ZIPs and notes (instructions, versions, checksums)
+# made from release/notes.md.
 
 on:
   push:
@@ -145,28 +146,39 @@ jobs:
       - name: Zip the files for the calculator
         run: |
           scripts/package.sh
-          {
-            echo "kernel:  $(cat out/kernel.release) (MaxSignal/linux @ $(cut -c1-12 out/kernel.commit))"
-            echo "loader:  MaxSignal/nspire-linux-loader2 @ $(cut -c1-12 out/loader.commit)"
-            echo "openwrt: $(cat out/openwrt.version)"
-            echo "bundle:  ${GITHUB_SHA::12}"
-          } > out/build-info.txt
-          cat out/build-info.txt
+          KERNEL_COMMIT=$(cut -c1-12 out/kernel.commit) LOADER_COMMIT=$(cut -c1-12 out/loader.commit) \
+            scripts/release-notes.sh
       - uses: actions/upload-artifact@v4
         with:
           name: nspire-linux
           path: |
             out/*.zip
             out/*.zip.sha256
-            out/build-info.txt
+            out/release-notes.md
           if-no-files-found: error
-      - name: Draft release
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release
+        # A v* tag: a release of its own. The main branch: the "latest"
+        # release, replaced by every build.
+        if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" \
-            --notes-file out/build-info.txt out/*.zip out/*.zip.sha256
+          files="out/*.zip out/*.zip.sha256"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" \
+              --notes-file out/release-notes.md $files
+          else
+            title="Latest build: Linux $(cat out/kernel.release), OpenWrt $(cat out/openwrt.version)"
+            gh release delete latest --yes 2>/dev/null || true
+            git push -f origin "$GITHUB_SHA:refs/tags/latest"
+            gh release create latest --title "$title" --latest \
+              --notes-file out/release-notes.md $files
+          fi
 
 permissions:
   contents: write
+
+# One build per branch or tag at a time: a newer push cancels an older build
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true

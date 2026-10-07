@@ -1,0 +1,4 @@
+NAME="TI-Nspire Linux"
+ID=nspire-linux
+PRETTY_NAME="TI-Nspire Linux (BusyBox)"
+HOME_URL="https://github.com/MaxSignal/nspire-linux-bundle"

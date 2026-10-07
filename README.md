@@ -6,7 +6,7 @@ and zips the files to copy to the calculator. The CX II is not supported.
 
 | ZIP | Root filesystem |
 |---|---|
-| `nspire-linux-<kernel>.zip` | Minimal BusyBox system (initrd of about 300 KB) |
+| `nspire-linux-<kernel>.zip` | Minimal BusyBox system and fastfetch (initrd of about 900 KB) |
 | `nspire-openwrt-<version>-<kernel>.zip` | OpenWrt for the ARM926EJ-S (official at91/sam9x packages, put together by the official ImageBuilder), set up as a client |
 
 The `linux/` folder of a ZIP goes to `/documents/linux/` on the calculator.
@@ -17,6 +17,9 @@ Both variants reach the network through Ethernet over USB (`usb0`, CDC NCM)
 as a DHCP client: share the computer's connection with the
 calculator to get online. The minimal variant has `ip`, `udhcpc`, `ping`,
 `nslookup` and `wget` (HTTPS without certificate checks).
+
+Both variants come with [fastfetch](https://github.com/fastfetch-cli/fastfetch),
+built here as a static binary (OpenWrt does not package it).
 
 The OpenWrt variant leaves out the router software (DHCP/DNS server,
 firewall, PPP, web interface). The packages to leave out are listed in
@@ -73,6 +76,7 @@ Locally:
 ```sh
 # Debian/Ubuntu: gcc-arm-linux-gnueabi bc bison flex libssl-dev zip
 scripts/build-kernel.sh     # out/zImage, out/nspire-*.dtb
+scripts/build-fastfetch.sh  # out/fastfetch (static musl; needs cmake, ninja)
 scripts/build-rootfs.sh     # out/rootfs.cpio.gz (BusyBox, static musl)
 scripts/build-openwrt.sh    # out/openwrt.cpio.gz (OpenWrt ImageBuilder: needs gawk, zstd...)
 scripts/build-loader.sh     # out/linuxloader2.tns (needs an Ubuntu 22.04 like system)

@@ -5,7 +5,7 @@
 # filesystem is made by the official ImageBuilder of the at91/sam9x target
 # (ARM926EJ-S) from the official packages, without the router ones.
 # Needs the ImageBuilder's host tools: gawk, make, perl, python3, zstd...
-# Input: $WORK/rootfs.list (build-rootfs.sh)
+# Input: $WORK/rootfs-base.list (build-rootfs.sh), $OUT/fastfetch
 # Output: $OUT/openwrt.cpio.gz, $OUT/openwrt.version
 set -eu
 cd "$(dirname "$0")/.."
@@ -33,12 +33,17 @@ echo "OpenWrt packages:"
 cut -d' ' -f1 "$D/bin/"*.manifest | tr '\n' ' '
 echo
 
-python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/rootfs.tar.gz" "$TOP/openwrt/overlay" "$TOP/openwrt/remove"
+# The overlay, and fastfetch (not packaged by OpenWrt)
+rm -rf "$D/overlay"
+cp -r "$TOP/openwrt/overlay" "$D/overlay"
+mkdir -p "$D/overlay/usr/bin"
+cp "$OUT/fastfetch" "$D/overlay/usr/bin/"
+python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/rootfs.tar.gz" "$D/overlay" "$TOP/openwrt/remove"
 
 GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
-[ -f "$WORK/rootfs.list" ] || { echo "run build-rootfs.sh first" >&2; exit 1; }
+[ -f "$WORK/rootfs-base.list" ] || { echo "run build-rootfs.sh first" >&2; exit 1; }
 {
-	cat "$WORK/rootfs.list"
+	cat "$WORK/rootfs-base.list"
 	echo "dir /payload 0755 0 0"
 	echo "file /payload/rootfs.tar.gz $D/rootfs.tar.gz 0644 0 0"
 } > "$WORK/openwrt.list"

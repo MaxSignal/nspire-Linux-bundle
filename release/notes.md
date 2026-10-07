@@ -50,7 +50,8 @@ calculator restarts into the TI-Nspire OS (as after any reset, Ndless may
 have to be installed again).
 
 The shell runs on the screen and keypad, and on the serial port (115200
-bauds).
+bauds). Both systems come with `fastfetch` (`fastfetch --logo none` fits
+the screen better).
 
 ## Space for Linux
 

@@ -1,20 +1,15 @@
 #!/bin/sh
 # Build a static BusyBox and pack the root filesystem as a gzipped cpio
-# archive (an initramfs passed as initrd by the loader).
-# Output: $OUT/rootfs.cpio.gz
+# archive (an initramfs passed as initrd by the loader), with fastfetch.
+# Input: $OUT/fastfetch (build-fastfetch.sh)
+# Output: $OUT/rootfs.cpio.gz, $WORK/rootfs-base.list (without fastfetch,
+# for the OpenWrt initrd)
 set -eu
 cd "$(dirname "$0")/.."
 TOP=$(pwd)
 . scripts/versions.sh
 
-# Toolchain: ARMv5 musl from Bootlin, unless CROSS_COMPILE points elsewhere
-if [ -z "${ROOTFS_CROSS_COMPILE:-}" ]; then
-	if [ ! -d "$WORK/musl-toolchain" ]; then
-		mkdir -p "$WORK/musl-toolchain"
-		curl -fsSL "$MUSL_TOOLCHAIN_URL" | tar -xJ -C "$WORK/musl-toolchain" --strip-components=1
-	fi
-	ROOTFS_CROSS_COMPILE=$WORK/musl-toolchain/bin/arm-buildroot-linux-musleabi-
-fi
+. scripts/musl-toolchain.sh
 
 if [ ! -d "$WORK/busybox-$BUSYBOX_VERSION" ]; then
 	curl -fsSL "$BUSYBOX_URL" | tar -xj -C "$WORK"
@@ -44,7 +39,8 @@ make -C "$BB" CROSS_COMPILE="$ROOTFS_CROSS_COMPILE" -j"$JOBS" busybox busybox.li
 GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 [ -x "$GEN" ] || { echo "gen_init_cpio not found (run build-kernel.sh first)" >&2; exit 1; }
 
-LIST=$WORK/rootfs.list
+[ -f "$OUT/fastfetch" ] || { echo "run build-fastfetch.sh first" >&2; exit 1; }
+LIST=$WORK/rootfs-base.list
 {
 	cat "$TOP/rootfs/devices.list"
 	echo "file /bin/busybox $BB/busybox 0755 0 0"
@@ -64,5 +60,9 @@ LIST=$WORK/rootfs.list
 		while read -r l; do echo "slink $l /bin/busybox 0777 0 0"; done
 } > "$LIST"
 
-"$GEN" "$LIST" | gzip -9 -n > "$OUT/rootfs.cpio.gz"
+{
+	cat "$LIST"
+	echo "file /usr/bin/fastfetch $OUT/fastfetch 0755 0 0"
+} > "$WORK/rootfs.list"
+"$GEN" "$WORK/rootfs.list" | gzip -9 -n > "$OUT/rootfs.cpio.gz"
 echo "rootfs: $(wc -c < "$OUT/rootfs.cpio.gz") bytes, busybox $BUSYBOX_VERSION"

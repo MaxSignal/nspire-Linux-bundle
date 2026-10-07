@@ -36,5 +36,8 @@ make -s -C "$SRC" O="$B" ARCH=arm kernelrelease > "$OUT/kernel.release"
 # dtc, gen_init_cpio and the NAND ECC code, for the rootfs and the boot test
 cp "$B/scripts/dtc/dtc" "$OUT/dtc"
 cp "$SRC/drivers/mtd/nand/ecc-sw-hamming.c" "$OUT/"
+# Kernel headers for userspace (the toolchain's are older)
+rm -rf "$OUT/kernel-headers"
+make -s -C "$SRC" O="$B" ARCH=arm headers_install INSTALL_HDR_PATH="$OUT/kernel-headers"
 cc -O2 -o "$OUT/gen_init_cpio" "$SRC/usr/gen_init_cpio.c"
 echo "kernel $(cat "$OUT/kernel.release") built"

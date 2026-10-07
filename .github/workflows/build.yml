@@ -56,10 +56,11 @@ jobs:
           name: kernel
           path: out
       - run: chmod +x out/dtc out/gen_init_cpio
-      - name: Install the OpenWrt ImageBuilder's host tools
+      - name: Install the host tools (fastfetch, OpenWrt ImageBuilder)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends gawk zstd python3-setuptools file unzip wget bzip2
+          sudo apt-get install -y --no-install-recommends gawk zstd python3-setuptools file unzip wget bzip2 \
+            cmake ninja-build
       - name: Cache the musl toolchain and the downloads
         uses: actions/cache@v4
         with:
@@ -67,7 +68,10 @@ jobs:
             work/musl-toolchain
             work/busybox-*/
             work/openwrt/openwrt-imagebuilder-*.tar.zst
+            work/fastfetch-[0-9]*/
           key: rootfs-${{ hashFiles('scripts/versions.sh') }}
+      - name: Build fastfetch
+        run: scripts/build-fastfetch.sh
       - name: Build the BusyBox root filesystem
         run: scripts/build-rootfs.sh
       - name: Build the OpenWrt root filesystem

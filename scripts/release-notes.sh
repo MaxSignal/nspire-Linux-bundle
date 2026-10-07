@@ -18,7 +18,7 @@ trap 'rm -f "$info" "$sums"' EXIT
 {
 	echo "- Kernel: $REL ([MaxSignal/linux]($(echo "$KERNEL_REPO" | sed 's/\.git$//')) \`$KERNEL_REF\`${KERNEL_COMMIT:+ @ \`$KERNEL_COMMIT\`})"
 	echo "- Loader: linuxloader2 ([MaxSignal/nspire-linux-loader2]($(echo "$LOADER_REPO" | sed 's/\.git$//')) \`$LOADER_REF\`${LOADER_COMMIT:+ @ \`$LOADER_COMMIT\`})"
-	echo "- BusyBox $BUSYBOX_VERSION, OpenWrt $(cat "$OUT/openwrt.version") (at91/sam9x)"
+	echo "- BusyBox $BUSYBOX_VERSION, OpenWrt $(cat "$OUT/openwrt.version") (at91/sam9x), fastfetch $FASTFETCH_VERSION"
 	echo "- Bundle: \`$(git -C "$TOP" rev-parse --short=12 HEAD 2>/dev/null || echo unknown)\`"
 } > "$info"
 (cd "$OUT" && sha256sum "$LINUX_ZIP" "$OPENWRT_ZIP") > "$sums"

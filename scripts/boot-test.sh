@@ -92,7 +92,7 @@ for variant; do
 			rm -f "$T/$m.flash"
 			boot "$m-ram" $m "$initrd" "$T/$m.flash" 120 "" <<'SCRIPT'
 !wait nspire:~#
-uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; echo CHECK-$((40+2))
+uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; fastfetch --pipe --logo none -s os:kernel:host:cpu:memory; echo CHECK-$((40+2))
 !wait CHECK-42
 !delay 300
 !quit 0
@@ -100,7 +100,8 @@ SCRIPT
 			if grep -a -q "^$REL" "$LOG" && grep -a -q "Unpacking initramfs" "$LOG" &&
 			   grep -a -q "rtc0" "$LOG" && grep -a -q "green:status" "$LOG" &&
 			   grep -a -q "^6$" "$LOG" && grep -a -q "^usb0:$" "$LOG" &&
-			   grep -a -q "^dhcp-client-running" "$LOG" && clean "$LOG"; then
+			   grep -a -q "^dhcp-client-running" "$LOG" &&
+			   grep -a -q "^Kernel: Linux $REL" "$LOG" && clean "$LOG"; then
 				pass "busybox $m from RAM"
 			else
 				fail "busybox $m from RAM" "$LOG"
@@ -147,7 +148,7 @@ SCRIPT
 !delay 500
 
 !wait root@
-n=0; until ubus call system board >/dev/null 2>&1 || [ \$n -ge 300 ]; do sleep 1; n=\$((n+1)); done; grep " / " /proc/mounts; ubus call system board | grep -E 'release|"kernel"|description'; echo "hostname \$(uci get system.@system[0].hostname)"; echo "wan \$(uci get network.wan.device) \$(uci get network.wan.proto)"; [ -e /root/note ] && cat /root/note; echo kept-\$((6*7)) > /root/note; sync; echo CHECK-\$((40+2))
+n=0; until ubus call system board >/dev/null 2>&1 || [ \$n -ge 300 ]; do sleep 1; n=\$((n+1)); done; grep " / " /proc/mounts; ubus call system board | grep -E 'release|"kernel"|description'; echo "hostname \$(uci get system.@system[0].hostname)"; echo "wan \$(uci get network.wan.device) \$(uci get network.wan.proto)"; fastfetch --pipe --logo none -s os:kernel; [ -e /root/note ] && cat /root/note; echo kept-\$((6*7)) > /root/note; sync; echo CHECK-\$((40+2))
 !wait CHECK-42
 !delay 300
 !quit 0
@@ -155,6 +156,7 @@ SCRIPT
 			ok=1
 			grep -a -q "^/dev/\(tifs0\|root\) / ext2 rw" "$LOG" && grep -a -q "\"kernel\": \"$REL\"" "$LOG" &&
 				grep -a -q "OpenWrt $OPENWRT_VERSION" "$LOG" && grep -a -q "^hostname nspire$" "$LOG" && grep -a -q "^wan usb0 dhcp$" "$LOG" &&
+				grep -a -q "^OS: OpenWrt $OPENWRT_VERSION" "$LOG" &&
 				clean "$LOG" || ok=0
 			if [ $b = first ]; then
 				grep -a -q "init: unpacking OpenWrt" "$LOG" || ok=0

@@ -21,6 +21,11 @@
 : "${BUSYBOX_URL:=https://busybox.net/downloads/busybox-${BUSYBOX_VERSION}.tar.bz2}"
 : "${MUSL_TOOLCHAIN_URL:=https://toolchains.bootlin.com/downloads/releases/toolchains/armv5-eabi/tarballs/armv5-eabi--musl--stable-2025.08-1.tar.xz}"
 
+# fastfetch, in both root filesystems (static, musl)
+: "${FASTFETCH_VERSION:=2.69.0}"
+: "${FASTFETCH_SHA256:=d0e42faf307e39e7b531d632745a56e4eb558a6545f557280099c622562355ee}"
+: "${FASTFETCH_URL:=https://github.com/fastfetch-cli/fastfetch/archive/refs/tags/${FASTFETCH_VERSION}.tar.gz}"
+
 # OpenWrt variant: official packages for the ARM926EJ-S (at91/sam9x target),
 # put together by the official ImageBuilder
 : "${OPENWRT_VERSION:=25.12.5}"

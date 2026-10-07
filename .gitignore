@@ -1,0 +1,5 @@
+tests/tifs/hamming_body.c
+tests/tifs/libhamming.so
+__pycache__/
+/out/
+/work/

@@ -1,0 +1,16 @@
+#
+# TI-Nspire: the only network link is Ethernet over USB to a computer, used
+# as a client: DHCP (and DHCPv6) on usb0, with the computer sharing its
+# connection
+#
+
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+ucidef_set_interface_wan "usb0"
+ucidef_set_hostname "nspire"
+
+board_config_flush
+
+exit 0

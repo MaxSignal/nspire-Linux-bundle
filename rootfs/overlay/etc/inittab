@@ -1,0 +1,7 @@
+::sysinit:/etc/init.d/rcS
+# Shell on the console (the screen and keypad when booted by the loader)
+::respawn:-/bin/sh
+# A second shell on the serial port, unless it is the console already
+::respawn:/usr/sbin/serial-shell
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r

@@ -1,0 +1,5 @@
+# Files of the OpenWrt root filesystem that do not apply to the TI-Nspire
+
+# Network configuration of the at91 evaluation boards: without it, OpenWrt
+# makes one from /etc/board.d (overlay)
+/etc/config/network

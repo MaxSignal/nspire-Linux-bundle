@@ -1,0 +1,7 @@
+# Boot @SYSTEM@ on the TI-Nspire Touchpad (classic). Open this file to run it with linuxloader2.
+rootimg /documents/linux/@CFG@
+kernel /documents/linux/zImage.tns
+dtb /documents/linux/nspire-tp.dtb.tns
+initrd /documents/linux/@INITRD@
+cmdline console=ttyS0,115200n8 console=tty0 fbcon=font:6x8
+boot

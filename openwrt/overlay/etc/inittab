@@ -1,0 +1,7 @@
+::sysinit:/etc/init.d/rcS S boot
+::shutdown:/etc/init.d/rcS K shutdown
+# The console: the screen (the last console= of the command line)
+::askconsole:/usr/libexec/login.sh
+# The serial port: ttyAMA0 on the CX, ttyS0 on the classic models
+ttyAMA0::askfirst:/usr/libexec/login.sh
+ttyS0::askfirst:/usr/libexec/login.sh

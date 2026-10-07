@@ -1,0 +1,172 @@
+name: Build
+
+# Builds the kernel, the root filesystems and the loader, boots them on the
+# Firebird emulator, and zips what goes onto the calculator. A tag v* also
+# creates a draft release with the ZIPs (the instructions go into the
+# release page).
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      kernel_ref:
+        description: Kernel branch or tag (default from scripts/versions.sh)
+        required: false
+      loader_ref:
+        description: Loader branch or tag (default from scripts/versions.sh)
+        required: false
+
+env:
+  OUT: ${{ github.workspace }}/out
+  WORK: ${{ github.workspace }}/work
+  KERNEL_REF: ${{ inputs.kernel_ref }}
+  LOADER_REF: ${{ inputs.loader_ref }}
+
+jobs:
+  kernel:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the cross compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-arm-linux-gnueabi bc bison flex libssl-dev
+      - name: Build the kernel
+        run: |
+          [ -n "$KERNEL_REF" ] || unset KERNEL_REF
+          scripts/build-kernel.sh
+          git -C work/linux rev-parse HEAD > out/kernel.commit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kernel
+          path: out/
+          if-no-files-found: error
+
+  rootfs:
+    needs: kernel
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: kernel
+          path: out
+      - run: chmod +x out/dtc out/gen_init_cpio
+      - name: Install the OpenWrt ImageBuilder's host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gawk zstd python3-setuptools file unzip wget bzip2
+      - name: Cache the musl toolchain and the downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            work/musl-toolchain
+            work/busybox-*/
+            work/openwrt/openwrt-imagebuilder-*.tar.zst
+          key: rootfs-${{ hashFiles('scripts/versions.sh') }}
+      - name: Build the BusyBox root filesystem
+        run: scripts/build-rootfs.sh
+      - name: Build the OpenWrt root filesystem
+        run: scripts/build-openwrt.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rootfs
+          path: |
+            out/rootfs.cpio.gz
+            out/openwrt.cpio.gz
+            out/openwrt.version
+          if-no-files-found: error
+
+  loader:
+    # The prebuilt Ndless SDK is built on Ubuntu 22.04 (genzehn needs Boost 1.74)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the SDK's runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libboost-program-options1.74.0
+      - name: Cache the Ndless SDK
+        uses: actions/cache@v4
+        with:
+          path: work/ndless-sdk
+          key: ndless-sdk-${{ github.run_id }}
+          restore-keys: ndless-sdk-
+      - name: Build the loader
+        run: |
+          [ -n "$LOADER_REF" ] || unset LOADER_REF
+          # Always take the latest SDK release; the cache only saves the download
+          # when the release has not changed
+          url=$(. scripts/versions.sh; echo "$NDLESS_SDK_URL")
+          new=$(curl -fsSIL "$url" | sed -n 's/^etag: *//Ip' | tail -1 | tr -d '\r')
+          [ "$(cat work/ndless-sdk/.etag 2>/dev/null)" = "$new" ] || rm -rf work/ndless-sdk
+          scripts/build-loader.sh
+          echo "$new" > work/ndless-sdk/.etag
+          git -C work/nspire-linux-loader2 rev-parse HEAD > out/loader.commit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loader
+          path: |
+            out/linuxloader2.tns
+            out/loader.commit
+          if-no-files-found: error
+
+  boot-test:
+    needs: [kernel, rootfs]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: chmod +x out/dtc out/gen_init_cpio
+      - name: Boot on the emulator
+        run: scripts/boot-test.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-test-logs
+          path: work/boot-test/*.log
+
+  package:
+    needs: [kernel, rootfs, loader, boot-test]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          pattern: '{kernel,rootfs,loader}'
+          merge-multiple: true
+      - name: Zip the files for the calculator
+        run: |
+          scripts/package.sh
+          {
+            echo "kernel:  $(cat out/kernel.release) (MaxSignal/linux @ $(cut -c1-12 out/kernel.commit))"
+            echo "loader:  MaxSignal/nspire-linux-loader2 @ $(cut -c1-12 out/loader.commit)"
+            echo "openwrt: $(cat out/openwrt.version)"
+            echo "bundle:  ${GITHUB_SHA::12}"
+          } > out/build-info.txt
+          cat out/build-info.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nspire-linux
+          path: |
+            out/*.zip
+            out/*.zip.sha256
+            out/build-info.txt
+          if-no-files-found: error
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" \
+            --notes-file out/build-info.txt out/*.zip out/*.zip.sha256
+
+permissions:
+  contents: write

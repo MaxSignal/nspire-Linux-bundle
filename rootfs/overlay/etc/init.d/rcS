@@ -1,0 +1,11 @@
+#!/bin/sh
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts && mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /tmp
+mount -t tmpfs tmpfs /run
+mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
+hostname -F /etc/hostname
+model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+echo "Linux $(uname -r) on ${model:-TI-Nspire}"

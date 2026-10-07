@@ -1,0 +1,13 @@
+#!/bin/sh
+# Shell on the serial port: ttyAMA0 on the CX, ttyS0 on the classic models.
+# getty sets the line up, then runs this again as its login program.
+[ "${1:-}" = -- ] && exec /bin/sh -l
+for dev in ttyAMA0 ttyS0; do
+	[ -c /dev/$dev ] || continue
+	# /proc/consoles flags the console device with 'C'
+	if grep -q "^$dev .*C" /proc/consoles; then
+		exec sleep 2147483647
+	fi
+	exec /sbin/getty -n -l /usr/sbin/serial-shell 115200 $dev vt100
+done
+exec sleep 2147483647

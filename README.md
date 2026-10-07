@@ -62,8 +62,9 @@ file in the TI-Nspire file browser and boot again.
 
 The GitHub Actions workflow (`.github/workflows/build.yml`) builds
 everything on every push, boots the result on the emulator and keeps the
-ZIPs as artifacts. Builds of `main` replace the `latest` release, and
-pushing a `v*` tag creates a release of its own. Release notes
+ZIPs as artifacts. Each build of `main` (tag `build-<run number>`), and
+each pushed `v*` tag, makes a new release marked as the latest one; older
+releases are kept. Release notes
 (installation and use, versions, checksums) are made from
 `release/notes.md` by `scripts/release-notes.sh`.
 

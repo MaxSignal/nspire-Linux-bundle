@@ -70,7 +70,7 @@ from RAM and forgets everything when turned off.
 ## Network
 
 Connect the calculator to a computer with a USB cable: it appears as a USB
-Ethernet adapter (CDC ECM, or RNDIS on Windows). Share the computer's
+Ethernet adapter (CDC NCM: Windows 10 or later, Linux, macOS). Share the computer's
 internet connection with it (Windows: Internet Connection Sharing; Linux:
 "Shared to other computers" in NetworkManager; macOS: Internet Sharing), and
 the calculator gets an address by DHCP on `usb0`.

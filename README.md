@@ -13,8 +13,8 @@ The `linux/` folder of a ZIP goes to `/documents/linux/` on the calculator.
 The two variants use different file names, so both can be installed side by
 side.
 
-Both variants reach the network through Ethernet over USB (`usb0`, CDC ECM
-or RNDIS) as a DHCP client: share the computer's connection with the
+Both variants reach the network through Ethernet over USB (`usb0`, CDC NCM)
+as a DHCP client: share the computer's connection with the
 calculator to get online. The minimal variant has `ip`, `udhcpc`, `ping`,
 `nslookup` and `wget` (HTTPS without certificate checks).
 

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Console colours for the classic models' grayscale STN panel (4 bpp):
+# black text on a white background, as the TI-Nspire OS shows it. Lit
+# (black) pixels make the panel's refresh visible as a slow wave over a
+# black background. The colour models keep the usual colours.
+# Usage: nspire-console [TTY]   (default: /dev/tty1)
+tty=${1:-/dev/tty1}
+[ "$(cat /sys/class/graphics/fb0/bits_per_pixel 2>/dev/null)" = 4 ] || exit 0
+[ -w "$tty" ] || exit 0
+# Palette entry N of the VT: ESC ] P N RRGGBB
+for e in 0ffffff 1aa0000 200aa00 3aa5500 40000aa 5aa00aa 600aaaa 7000000 \
+	 8555555 9ff5555 a00aa00 baa5500 c5555ff dff55ff e00aaaa f000000; do
+	printf '\033]P%s' "$e"
+done > "$tty"

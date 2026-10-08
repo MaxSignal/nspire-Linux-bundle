@@ -8,6 +8,7 @@ mount -t tmpfs tmpfs /run
 mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
 hostname -F /etc/hostname
 model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
+nspire-console
 echo "Linux $(uname -r) on ${model:-TI-Nspire}"
 # Network: Ethernet over USB to a computer, which shares its connection
 ip link set lo up

@@ -33,11 +33,13 @@ echo "OpenWrt packages:"
 cut -d' ' -f1 "$D/bin/"*.manifest | tr '\n' ' '
 echo
 
-# The overlay, and fastfetch (not packaged by OpenWrt)
+# The overlay, fastfetch (not packaged by OpenWrt) and the console colours
+# of the minimal system
 rm -rf "$D/overlay"
 cp -r "$TOP/openwrt/overlay" "$D/overlay"
-mkdir -p "$D/overlay/usr/bin"
+mkdir -p "$D/overlay/usr/bin" "$D/overlay/usr/sbin"
 cp "$OUT/fastfetch" "$D/overlay/usr/bin/"
+cp "$TOP/rootfs/overlay/usr/sbin/nspire-console" "$D/overlay/usr/sbin/"
 python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/rootfs.tar.gz" "$D/overlay" "$TOP/openwrt/remove"
 
 GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}

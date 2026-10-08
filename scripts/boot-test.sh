@@ -5,7 +5,8 @@
 #    synthetic TI-Nspire filesystem holding a new image file (as the loader
 #    creates it), the first boot formats and fills the image, and a second
 #    boot runs from it and finds what the first one wrote;
-#  - openwrt: the same two boots on the CX, up to a login shell.
+#  - openwrt: the same two boots on the CX and on the Touchpad (8 MB image),
+#    up to a login shell.
 # Usage: boot-test.sh [busybox] [openwrt]   (default: the initrds that were built)
 # BOOT_TEST_MODELS limits the models of the busybox test (default: cx tp clp).
 set -eu
@@ -145,15 +146,19 @@ SCRIPT
 		done
 		;;
 	openwrt)
-		initrd=$OUT/openwrt.cpio.gz image=openwrt.img.tns m=cx
-		new_flash $m "$T/openwrt.flash" $image 32768
+		initrd=$OUT/openwrt.cpio.gz image=openwrt.img.tns
+		# The Touchpad with an image as small as it may get (32 MB of
+		# NAND, most of it the TI-Nspire OS's) and its 32 MB of RAM
+		for m in ${OPENWRT_MODELS:-cx tp}; do
+		case $m in cx) kib=32768;; *) kib=8192;; esac
+		new_flash $m "$T/openwrt-$m.flash" $image $kib
 		for b in first second; do
-			boot "openwrt-$b" $m "$initrd" "$T/openwrt.flash" ${OPENWRT_TIMEOUT:-900} " nspire_tifs.path=/documents/linux/$image" <<SCRIPT
+			boot "openwrt-$m-$b" $m "$initrd" "$T/openwrt-$m.flash" ${OPENWRT_TIMEOUT:-900} " nspire_tifs.path=/documents/linux/$image" <<SCRIPT
 !wait Please press Enter to activate this console.
 !delay 500
 
 !wait root@
-n=0; until ubus call system board >/dev/null 2>&1 || [ \$n -ge 300 ]; do sleep 1; n=\$((n+1)); done; grep " / " /proc/mounts; ubus call system board | grep -E 'release|"kernel"|description'; echo "hostname \$(uci get system.@system[0].hostname)"; echo "wan \$(uci get network.wan.device) \$(uci get network.wan.proto)"; fastfetch --pipe --logo none -s os:kernel; [ -e /root/note ] && cat /root/note; echo kept-\$((6*7)) > /root/note; sync; echo CHECK-\$((40+2))
+n=0; until ubus call system board >/dev/null 2>&1 || [ \$n -ge 300 ]; do sleep 1; n=\$((n+1)); done; grep " / " /proc/mounts; ubus call system board | grep -E 'release|"kernel"|description'; echo "hostname \$(uci get system.@system[0].hostname)"; echo "wan \$(uci get network.wan.device) \$(uci get network.wan.proto)"; fastfetch --pipe --logo none -s os:kernel:memory:disk; [ -e /root/note ] && cat /root/note; echo kept-\$((6*7)) > /root/note; sync; echo CHECK-\$((40+2))
 !wait CHECK-42
 !delay 300
 !quit 0
@@ -169,6 +174,7 @@ SCRIPT
 				grep -a -q "^kept-42" "$LOG" && ! grep -a -q "init: first boot" "$LOG" || ok=0
 			fi
 			if [ $ok = 1 ]; then pass "openwrt $m $b boot"; else fail "openwrt $m $b boot" "$LOG"; fi
+		done
 		done
 		;;
 	*) echo "unknown variant $variant" >&2; exit 1;;

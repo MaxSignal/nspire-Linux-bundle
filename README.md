@@ -98,7 +98,9 @@ in `/chosen`):
   `tests/tifs/mkfsimage.py` holding a new, tagged image file as the loader
   creates it, the first boot formats and fills the image, and a second boot
   runs from it and finds the file the first one wrote.
-- OpenWrt variant: the same first and second boots on the CX.
+- OpenWrt variant: the same first and second boots on the CX, and on the
+  Touchpad with an 8 MB image (OpenWrt takes about 5.7 MB of it, and 11 of
+  the 23 MB of RAM Linux gets there).
 
 The synthetic filesystem follows Hackspire and Goplat's analysis and may
 differ from what is on real calculators. This is why the driver checks the

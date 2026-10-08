@@ -63,6 +63,9 @@ reserve = 2M   # space left to the TI-Nspire OS with "max"
 ```
 
 When there is not enough free space for the size asked for, `max` is used.
+The minimal Linux needs about 2 MB, OpenWrt about 6 MB: on a Touchpad or a
+Clickpad (32 MB of flash, most of it the TI-Nspire OS's), OpenWrt runs with
+an 8 MB image, with about 2 MB left for your files.
 To change the size later, or to start over with a clean system, delete
 `rootfs.img` (`openwrt.img`) in the TI-Nspire file browser and start Linux
 again. Without the image file (or when it cannot be written to), Linux runs

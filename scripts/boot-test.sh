@@ -90,14 +90,19 @@ for variant; do
 		for m in ${BOOT_TEST_MODELS:-cx tp clp}; do
 			# From RAM, without an image
 			rm -f "$T/$m.flash"
-			boot "$m-ram" $m "$initrd" "$T/$m.flash" 120 "" <<'SCRIPT'
+			# LCD control register: 8 bpp palette on a monochrome 8 bit
+			# STN panel (classic), RGB565 TFT (CX)
+			case $m in cx) lcd="0xC0000018 0x0000192D";; *) lcd="0xC000001C 0x00000857";; esac
+			boot "$m-ram" $m "$initrd" "$T/$m.flash" 120 "" <<SCRIPT
 !wait nspire:~#
-uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; fastfetch --pipe --logo none -s os:kernel:host:cpu:memory; echo CHECK-$((40+2))
+echo "lcd \$(devmem ${lcd% *})"; uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; fastfetch --pipe --logo none -s os:kernel:host:cpu:memory; echo CHECK-\$((40+2))
 !wait CHECK-42
 !delay 300
+!screenshot $T/$m-ram.ppm
 !quit 0
 SCRIPT
 			if grep -a -q "^$REL" "$LOG" && grep -a -q "Unpacking initramfs" "$LOG" &&
+			   grep -a -q "^lcd ${lcd#* }$" "$LOG" &&
 			   grep -a -q "rtc0" "$LOG" && grep -a -q "green:status" "$LOG" &&
 			   grep -a -q "^6$" "$LOG" && grep -a -q "^usb0:$" "$LOG" &&
 			   grep -a -q "^dhcp-client-running" "$LOG" &&

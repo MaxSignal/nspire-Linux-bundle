@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
 #define PHX		0xb8000000
@@ -116,22 +117,63 @@ static int erase_block(uint32_t page)
 	return wait_ready();
 }
 
-static int program(uint32_t page, uint32_t extra)
+/* A page of ordinary RAM (SDRAM) for the DMA, through /proc/self/pagemap */
+static uint8_t *dram;
+static uint32_t dram_phys;
+
+static int setup_dram(void)
 {
+	uint64_t entry;
+	int fd;
+
+	dram = aligned_alloc(4096, 4096);
+	if (!dram || mlock(dram, 4096))
+		return -1;
+	memset(dram, 0, 4096);
+	fd = open("/proc/self/pagemap", O_RDONLY);
+	if (fd < 0 || pread(fd, &entry, 8, (uintptr_t)dram / 4096 * 8) != 8)
+		return -1;
+	close(fd);
+	if (!(entry >> 63))
+		return -1;
+	dram_phys = (uint32_t)(entry & ((1ULL << 55) - 1)) * 4096;
+	return 0;
+}
+
+#define PAT(i)	((uint8_t)((i) * 7 + 3))
+
+/*
+ * Program a page with the pattern: from the SRAM or ordinary RAM, with the
+ * PAGEPROG command in the same operation or on its own. Returns the
+ * status the controller reads (READ STATUS).
+ */
+static unsigned program(uint32_t page, uint32_t extra, int from_dram, int split)
+{
+	uint32_t op;
 	int i;
 
-	for (i = 0; i < 528; i++)
-		buf[i] = i * 7 + 3;
+	for (i = 0; i < 528; i++) {
+		buf[i] = PAT(i);
+		if (dram)
+			dram[i] = PAT(i);
+	}
+	if (from_dram)		/* out of the data cache, into the RAM */
+		syscall(0xf0002, dram, dram + 4096, 0);
 	run(0x00);					/* pointer: first half */
 	REG(0x10) = 0;
 	REG(0x14) = page & 0xff;
 	REG(0x18) = page >> 8 & 0xff;
 	REG(0x24) = 528;
-	REG(0x28) = SRAM;
-	/* SEQIN, 3 address bytes, write, PAGEPROG */
-	if (run(0x80 | 3 << 8 | 1 << 11 | 0x10 << 12 | 1 << 20 | 1 << 22 | extra))
-		return -1;
-	return wait_ready();
+	REG(0x28) = from_dram ? dram_phys : SRAM;
+	/* SEQIN, 3 address bytes, write, data [, PAGEPROG] */
+	op = 0x80 | 3 << 8 | 1 << 11 | 1 << 22 | extra;
+	if (!split)
+		op |= 0x10 << 12 | 1 << 20;
+	run(op);
+	if (split)
+		run(0x10);
+	wait_ready();
+	return REG(0x34) & 0xff;
 }
 
 static void write_test(uint32_t part_page, uint32_t part_pages)
@@ -154,24 +196,46 @@ static void write_test(uint32_t part_page, uint32_t part_pages)
 		return;
 	}
 	printf("write test in unit %u (page %#x)\n", (first - part_page) / 64, first);
-	REG(0x04) = 1;					/* writable */
-	for (i = 0; i < 2; i++) {
-		uint32_t extra = i ? 0 : 1 << 21, page = first + 1 + i;
-		int j;
+	if (setup_dram())
+		printf("no RAM page for the DMA\n");
+	{
+		static const struct {
+			const char *name;
+			uint32_t extra;
+			int wp, from_dram, split;
+		} v[] = {
+			{ "sram b21 wp1", 1 << 21, 1, 0, 0 },
+			{ "sram none wp1", 0, 1, 0, 0 },
+			{ "dram b21 wp1", 1 << 21, 1, 1, 0 },
+			{ "split b21 wp1", 1 << 21, 1, 0, 1 },
+			/* last: Firebird stops on a write with the flag clear */
+			{ "sram b21 wp0", 1 << 21, 0, 0, 0 },
+			{ "dram b21 wp0", 1 << 21, 0, 1, 0 },
+		};
 
-		program(page, extra);
-		read_page(page, 1 << 21);
-		for (bad = -1, j = 0; j < 528; j++)
-			if (buf[j] != (uint8_t)(j * 7 + 3)) {
-				bad = j;
-				break;
-			}
-		printf("write %-4s %s", i ? "none" : "b21", bad < 0 ? "OK" : "BAD at");
-		if (bad >= 0)
-			printf(" %d: %02x%02x%02x%02x", bad, buf[bad], buf[bad + 1], buf[bad + 2],
-			       buf[bad + 3]);
-		putchar('\n');
+		for (i = 0; i < (int)(sizeof(v) / sizeof(v[0])); i++) {
+			uint32_t page = first + 1 + i;
+			unsigned st;
+			int j;
+
+			if (v[i].from_dram && !dram)
+				continue;
+			REG(0x04) = v[i].wp;
+			st = program(page, v[i].extra, v[i].from_dram, v[i].split);
+			read_page(page, 1 << 21);
+			for (bad = -1, j = 0; j < 528; j++)
+				if (buf[j] != PAT(j)) {
+					bad = j;
+					break;
+				}
+			printf("%-13s st=%02x %s", v[i].name, st, bad < 0 ? "OK" : "BAD at");
+			if (bad >= 0)
+				printf(" %d: %02x%02x%02x%02x", bad, buf[bad], buf[bad + 1],
+				       buf[bad + 2], buf[bad + 3]);
+			putchar('\n');
+		}
 	}
+	REG(0x04) = 1;
 	erase_block(first);
 	for (bad = 0, p = 0; p < 32; p++) {
 		read_page(first + p, 1 << 21);

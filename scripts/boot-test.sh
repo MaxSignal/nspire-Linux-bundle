@@ -90,9 +90,9 @@ for variant; do
 		for m in ${BOOT_TEST_MODELS:-cx tp clp}; do
 			# From RAM, without an image
 			rm -f "$T/$m.flash"
-			# LCD control register: 8 bpp palette on a monochrome 8 bit
+			# LCD control register: 4 bpp palette on a monochrome 8 bit
 			# STN panel (classic), RGB565 TFT (CX)
-			case $m in cx) lcd="0xC0000018 0x0000192D";; *) lcd="0xC000001C 0x00000857";; esac
+			case $m in cx) lcd="0xC0000018 0x0000192D";; *) lcd="0xC000001C 0x00000855";; esac
 			boot "$m-ram" $m "$initrd" "$T/$m.flash" 120 "" <<SCRIPT
 !wait nspire:~#
 echo "lcd \$(devmem ${lcd% *})"; uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; fastfetch --pipe --logo none -s os:kernel:host:cpu:memory; echo CHECK-\$((40+2))

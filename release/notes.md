@@ -71,6 +71,11 @@ file: 3 MB for the minimal Linux, 7 MB for OpenWrt, 1 MB less without
 fastfetch); without the free space for it, Linux runs from RAM. On a
 Touchpad or a Clickpad (32 MB of flash, most of it the TI-Nspire OS's),
 OpenWrt runs with an 8 MB image.
+
+OpenWrt's root filesystem comes as `openwrt.tar.gz` (2.5 MB), which the
+loader writes into the new image: OpenWrt needs that much more free space
+the first time. Once OpenWrt has started, you may delete `openwrt.tar.gz`
+to get the space back; it is only needed again to make a new image.
 To change the size later, or to start over with a clean system, delete
 `rootfs.img` (`openwrt.img`) in the TI-Nspire file browser and start Linux
 again. Without the image file (or when it cannot be written to), Linux runs

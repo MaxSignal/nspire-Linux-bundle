@@ -137,16 +137,16 @@ files = {}
 def walk(ino, path):
     d = inode_data(ino)
     pos = 0
-    while pos + 12 <= len(d) and d[pos] == 0x80:
-        pad, m = struct.unpack_from('<I', d, pos + 2)[0], struct.unpack_from('<H', d, pos + 6)[0]
-        attr, idx = d[pos + 8], struct.unpack_from('<H', d, pos + 10)[0]
-        name = d[pos + 12:pos + 12 + m].decode('utf-16-le')
+    while pos + 18 <= len(d) and d[pos] == 0x80:
+        length, m = struct.unpack_from('<I', d, pos + 3)[0], struct.unpack_from('<H', d, pos + 7)[0]
+        attr, idx = d[pos + 9], struct.unpack_from('<I', d, pos + 11)[0]
+        name = d[pos + 18:pos + 18 + m].decode('utf-16-le')
         child = by_index(idx)
         if attr & 2:
             walk(child, path + '/' + name)
         else:
             files[path + '/' + name] = inode_data(child)
-        pos += 12 + m + pad
+        pos += length
 
 
 walk(by_index(2), '')

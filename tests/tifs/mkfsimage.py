@@ -148,17 +148,20 @@ class Reliance:
 
     @staticmethod
     def dirent(name, index, is_dir):
+        """As on a real TI-Nspire: 0x80, a checksum (?), the length of the
+        entry (u32 at 3, a multiple of 16), the length of the name (u16 at
+        7), attributes (8: in use, 2: directory) at 9, the inode index (u32
+        at 11), 01 00 at 16, then the UTF-16 name at 18."""
         n = name.encode('utf-16-le')
-        pad = (-(12 + len(n))) % 4
-        e = bytearray(12)
+        length = (18 + len(n) + 15) // 16 * 16
+        e = bytearray(18)
         e[0] = 0x80
-        e[1] = 0                              # checksum?: not checked
-        struct.pack_into('<I', e, 2, pad)     # "length of the entry (n)": padding after the name
-        struct.pack_into('<H', e, 6, len(n))  # name length in bytes
-        e[8] = 0x1 | (0x2 if is_dir else 0)
-        e[9] = 0
-        struct.pack_into('<H', e, 10, index)
-        return bytes(e) + n + b'\x00' * pad
+        struct.pack_into('<I', e, 3, length)
+        struct.pack_into('<H', e, 7, len(n))
+        e[9] = 0x1 | (0x2 if is_dir else 0)
+        struct.pack_into('<I', e, 11, index)
+        struct.pack_into('<H', e, 16, 1)
+        return bytes(e) + n + b'\x00' * (length - 18 - len(n))
 
     def tree(self, node):
         """node: dict name -> bytes (file) or dict (directory): the root

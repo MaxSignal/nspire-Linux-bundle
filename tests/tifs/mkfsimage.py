@@ -150,7 +150,7 @@ class Reliance:
     def dirent(name, index, is_dir):
         """As on a real TI-Nspire: 0x80, a checksum (?), the length of the
         entry (u32 at 3, a multiple of 16), the length of the name (u16 at
-        7), attributes (8: in use, 2: directory) at 9, the inode index (u32
+        7), attributes (1: in use, 2: directory) at 9, the inode index (u32
         at 11), 01 00 at 16, then the UTF-16 name at 18."""
         n = name.encode('utf-16-le')
         length = (18 + len(n) + 15) // 16 * 16
@@ -169,7 +169,11 @@ class Reliance:
         return self._tree(node, 2)
 
     def _tree(self, node, index):
-        entries = b''
+        # An entry not in use first, as TI's OS seems to leave them: the
+        # driver must step over it
+        e = bytearray(self.dirent('deleted', 0, False))
+        e[0] = e[9] = 0
+        entries = bytes(e)
         for name, child in node.items():
             ci = self.next_index
             self.next_index += 1

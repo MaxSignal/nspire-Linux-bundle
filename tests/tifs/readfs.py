@@ -137,8 +137,13 @@ files = {}
 def walk(ino, path):
     d = inode_data(ino)
     pos = 0
-    while pos + 18 <= len(d) and d[pos] == 0x80:
+    while pos + 18 <= len(d):
         length, m = struct.unpack_from('<I', d, pos + 3)[0], struct.unpack_from('<H', d, pos + 7)[0]
+        if length < 18 or length % 16 or pos + length > len(d):
+            break
+        if d[pos] != 0x80:      # not in use: step over it, as the driver does
+            pos += length
+            continue
         attr, idx = d[pos + 9], struct.unpack_from('<I', d, pos + 11)[0]
         name = d[pos + 18:pos + 18 + m].decode('utf-16-le')
         child = by_index(idx)

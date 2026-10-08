@@ -19,6 +19,7 @@ populate() {
 		for e in /*; do
 			case "$e" in
 			/proc|/sys|/dev|/newroot|/payload) mkdir -p "$1$e" ;;
+			/rootfs-kib) ;;
 			*) cp -a "$e" "$1/" || return 1 ;;
 			esac
 		done
@@ -64,6 +65,14 @@ ro=$(cat /sys/block/tifs0/ro)
 if [ "$(hexdump -s 1080 -n 2 -e '1/2 "%04x"' /dev/tifs0)" != ef53 ]; then
 	if [ "$ro" = 1 ]; then
 		say "the image is read-only and not formatted (see dmesg | grep tifs), running from RAM"
+		boot_ram
+	fi
+	# Too small for this system: leave it new, so that the loader can
+	# still grow it
+	need=$(cat /rootfs-kib 2>/dev/null || echo 0)
+	size=$(($(cat /sys/block/tifs0/size) / 2))
+	if [ "$size" -lt "$need" ]; then
+		say "the image is too small for this system ($size KiB, $need KiB needed), running from RAM"
 		boot_ram
 	fi
 	say "first boot: formatting $path"

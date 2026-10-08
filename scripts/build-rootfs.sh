@@ -2,8 +2,9 @@
 # Build a static BusyBox and pack the root filesystem as a gzipped cpio
 # archive (an initramfs passed as initrd by the loader), with fastfetch.
 # Input: $OUT/fastfetch (build-fastfetch.sh)
-# Output: $OUT/rootfs.cpio.gz, $WORK/rootfs-base.list (without fastfetch,
-# for the OpenWrt initrd)
+# Output: $OUT/rootfs.cpio.gz (with fastfetch), $OUT/rootfs-noff.cpio.gz
+# (without), $OUT/rootfs*.min-kib (the space each needs in an image),
+# $WORK/rootfs-base.list (for the OpenWrt initrd)
 set -eu
 cd "$(dirname "$0")/.."
 TOP=$(pwd)
@@ -60,9 +61,16 @@ LIST=$WORK/rootfs-base.list
 		while read -r l; do echo "slink $l /bin/busybox 0777 0 0"; done
 } > "$LIST"
 
-{
-	cat "$LIST"
-	echo "file /usr/bin/fastfetch $OUT/fastfetch 0755 0 0"
-} > "$WORK/rootfs.list"
-"$GEN" "$WORK/rootfs.list" | gzip -9 -n > "$OUT/rootfs.cpio.gz"
-echo "rootfs: $(wc -c < "$OUT/rootfs.cpio.gz") bytes, busybox $BUSYBOX_VERSION"
+# With fastfetch (rootfs) and without (rootfs-noff). /rootfs-kib tells /init
+# the space the root filesystem needs in an image; package.sh puts it into
+# the loader's config file too.
+for v in rootfs rootfs-noff; do
+	{
+		cat "$LIST"
+		[ $v = rootfs ] && echo "file /usr/bin/fastfetch $OUT/fastfetch 0755 0 0"
+	} > "$WORK/$v.list"
+	python3 -I "$TOP/scripts/rootfs-size.py" --cpio-list "$WORK/$v.list" > "$OUT/$v.min-kib"
+	echo "file /rootfs-kib $OUT/$v.min-kib 0644 0 0" >> "$WORK/$v.list"
+	"$GEN" "$WORK/$v.list" | gzip -9 -n > "$OUT/$v.cpio.gz"
+	echo "$v: $(wc -c < "$OUT/$v.cpio.gz") bytes, $(cat "$OUT/$v.min-kib") KiB needed, busybox $BUSYBOX_VERSION"
+done

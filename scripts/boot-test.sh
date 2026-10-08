@@ -6,7 +6,8 @@
 #    creates it), the first boot formats and fills the image, and a second
 #    boot runs from it and finds what the first one wrote;
 #  - openwrt: the same two boots on the CX and on the Touchpad (8 MB image),
-#    up to a login shell.
+#    up to a login shell; and with an image too small for it, which is left
+#    new while OpenWrt runs from RAM.
 # Usage: boot-test.sh [busybox] [openwrt]   (default: the initrds that were built)
 # BOOT_TEST_MODELS limits the models of the busybox test (default: cx tp clp).
 set -eu
@@ -176,6 +177,26 @@ SCRIPT
 			if [ $ok = 1 ]; then pass "openwrt $m $b boot"; else fail "openwrt $m $b boot" "$LOG"; fi
 		done
 		done
+
+		# A new image too small for OpenWrt: left new, OpenWrt runs from RAM
+		new_flash tp "$T/openwrt-small.flash" $image 4096
+		boot "openwrt-tp-small" tp "$initrd" "$T/openwrt-small.flash" ${OPENWRT_TIMEOUT:-900} " nspire_tifs.path=/documents/linux/$image" <<SCRIPT
+!wait Please press Enter to activate this console.
+!delay 500
+
+!wait root@
+grep " / " /proc/mounts; fastfetch --pipe --logo none -s os; echo CHECK-\$((40+2))
+!wait CHECK-42
+!delay 300
+!quit 0
+SCRIPT
+		if grep -a -q "init: the image is too small for this system" "$LOG" &&
+		   ! grep -a -q "init: first boot: formatting" "$LOG" &&
+		   grep -a -q "^tmpfs / tmpfs" "$LOG" && grep -a -q "^OS: OpenWrt" "$LOG" && clean "$LOG"; then
+			pass "openwrt tp with a too small image, from RAM"
+		else
+			fail "openwrt tp with a too small image, from RAM" "$LOG"
+		fi
 		;;
 	*) echo "unknown variant $variant" >&2; exit 1;;
 	esac

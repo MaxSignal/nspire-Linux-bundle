@@ -9,6 +9,8 @@ and zips the files to copy to the calculator. The CX II is not supported.
 | `nspire-linux-<kernel>.zip` | Minimal BusyBox system and fastfetch (initrd of about 900 KB) |
 | `nspire-openwrt-<version>-<kernel>.zip` | OpenWrt for the ARM926EJ-S (official at91/sam9x packages, put together by the official ImageBuilder), set up as a client |
 
+Each also comes without fastfetch (`…-no-fastfetch.zip`, 1.5 MB less).
+
 The `linux/` folder of a ZIP goes to `/documents/linux/` on the calculator.
 The two variants use different file names, so both can be installed side by
 side.
@@ -18,8 +20,8 @@ as a DHCP client: share the computer's connection with the
 calculator to get online. The minimal variant has `ip`, `udhcpc`, `ping`,
 `nslookup` and `wget` (HTTPS without certificate checks).
 
-Both variants come with [fastfetch](https://github.com/fastfetch-cli/fastfetch),
-built here as a static binary (OpenWrt does not package it).
+[fastfetch](https://github.com/fastfetch-cli/fastfetch) is built here as a
+static binary (OpenWrt does not package it).
 
 The OpenWrt variant leaves out the router software (DHCP/DNS server,
 firewall, PPP, web interface). The packages to leave out are listed in
@@ -48,15 +50,19 @@ overridden from the environment.
    progress bar:
    - `size = max`: all the free space minus `reserve` (2 MB by default);
    - `size = 64M` and so on: that size, or the same as `max` when there is
-     not enough free space.
+     not enough free space;
+   - never less than `min`, the space the system needs (computed by the
+     build from its files); without the free space for it, there is no
+     image.
 3. The kernel's `nspire-tifs` driver reads FlashFX and Reliance, finds the
    file and exposes its contents as `/dev/tifs0`. Writes replace only the
    pages of the file's contents, the way FlashFX does it, and never touch
    the TI-Nspire OS's metadata.
 4. The initrd's `/init` formats the image (ext2) if needed and fills it with
    the root filesystem (with OpenWrt in the OpenWrt variant), then switches
-   to it. Later boots use it as it is. Without an image, or when the image
-   is read-only, the system runs from RAM.
+   to it. Later boots use it as it is. Without an image, when the image is
+   read-only, or when a new image is too small for the system (it is then
+   left new, for the loader to grow), the system runs from RAM.
 
 To recreate the image (for instance with another size), delete the image
 file in the TI-Nspire file browser and boot again.

@@ -6,7 +6,8 @@
 # (ARM926EJ-S) from the official packages, without the router ones.
 # Needs the ImageBuilder's host tools: gawk, make, perl, python3, zstd...
 # Input: $WORK/rootfs-base.list (build-rootfs.sh), $OUT/fastfetch
-# Output: $OUT/openwrt.cpio.gz, $OUT/openwrt.version
+# Output: $OUT/openwrt.cpio.gz (with fastfetch), $OUT/openwrt-noff.cpio.gz
+# (without), $OUT/openwrt*.min-kib, $OUT/openwrt.version
 set -eu
 cd "$(dirname "$0")/.."
 TOP=$(pwd)
@@ -33,22 +34,26 @@ echo "OpenWrt packages:"
 cut -d' ' -f1 "$D/bin/"*.manifest | tr '\n' ' '
 echo
 
-# The overlay, fastfetch (not packaged by OpenWrt) and the console colours
-# of the minimal system
-rm -rf "$D/overlay"
-cp -r "$TOP/openwrt/overlay" "$D/overlay"
-mkdir -p "$D/overlay/usr/bin" "$D/overlay/usr/sbin"
-cp "$OUT/fastfetch" "$D/overlay/usr/bin/"
-cp "$TOP/rootfs/overlay/usr/sbin/nspire-console" "$D/overlay/usr/sbin/"
-python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/rootfs.tar.gz" "$D/overlay" "$TOP/openwrt/remove"
-
+# The overlay and the console colours of the minimal system, with
+# fastfetch (not packaged by OpenWrt: openwrt) and without (openwrt-noff)
 GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 [ -f "$WORK/rootfs-base.list" ] || { echo "run build-rootfs.sh first" >&2; exit 1; }
-{
-	cat "$WORK/rootfs-base.list"
-	echo "dir /payload 0755 0 0"
-	echo "file /payload/rootfs.tar.gz $D/rootfs.tar.gz 0644 0 0"
-} > "$WORK/openwrt.list"
-"$GEN" "$WORK/openwrt.list" | gzip -9 -n > "$OUT/openwrt.cpio.gz"
+for v in openwrt openwrt-noff; do
+	rm -rf "$D/overlay"
+	cp -r "$TOP/openwrt/overlay" "$D/overlay"
+	mkdir -p "$D/overlay/usr/bin" "$D/overlay/usr/sbin"
+	cp "$TOP/rootfs/overlay/usr/sbin/nspire-console" "$D/overlay/usr/sbin/"
+	[ $v = openwrt ] && cp "$OUT/fastfetch" "$D/overlay/usr/bin/"
+	python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/$v.tar.gz" "$D/overlay" \
+		"$TOP/openwrt/remove"
+	python3 -I "$TOP/scripts/rootfs-size.py" --tar "$D/$v.tar.gz" > "$OUT/$v.min-kib"
+	{
+		cat "$WORK/rootfs-base.list"
+		echo "dir /payload 0755 0 0"
+		echo "file /payload/rootfs.tar.gz $D/$v.tar.gz 0644 0 0"
+		echo "file /rootfs-kib $OUT/$v.min-kib 0644 0 0"
+	} > "$WORK/$v.list"
+	"$GEN" "$WORK/$v.list" | gzip -9 -n > "$OUT/$v.cpio.gz"
+	echo "$v: $(wc -c < "$OUT/$v.cpio.gz") bytes, $(cat "$OUT/$v.min-kib") KiB needed, OpenWrt $OPENWRT_VERSION"
+done
 echo "$OPENWRT_VERSION" > "$OUT/openwrt.version"
-echo "openwrt: $(wc -c < "$OUT/openwrt.cpio.gz") bytes, OpenWrt $OPENWRT_VERSION"

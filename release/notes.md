@@ -11,10 +11,14 @@ Linux @KERNEL@ for the TI-Nspire CX / CX CAS, Touchpad and Clickpad
 
 | File | System |
 |---|---|
-| `@LINUX_ZIP@` | Minimal Linux (BusyBox) |
-| `@OPENWRT_ZIP@` | OpenWrt @OPENWRT@, set up as a client (no router software) |
+| `@LINUX_ZIP@` | Minimal Linux (BusyBox), with fastfetch |
+| `@LINUX_ZIP_NOFF@` | The same without fastfetch |
+| `@OPENWRT_ZIP@` | OpenWrt @OPENWRT@, set up as a client (no router software), with fastfetch |
+| `@OPENWRT_ZIP_NOFF@` | The same without fastfetch |
 
-Both can be installed side by side: their file names do not overlap.
+The minimal Linux and OpenWrt can be installed side by side: their file
+names do not overlap. A ZIP and its version without fastfetch have the same
+file names. fastfetch takes about 1.5 MB.
 
 ## Installation
 
@@ -50,8 +54,7 @@ calculator restarts into the TI-Nspire OS (as after any reset, Ndless may
 have to be installed again).
 
 The shell runs on the screen and keypad, and on the serial port (115200
-bauds). Both systems come with `fastfetch` (`fastfetch --logo none` fits
-the screen better).
+bauds). `fastfetch --logo none` fits the screen better than `fastfetch`.
 
 ## Space for Linux
 
@@ -63,9 +66,11 @@ reserve = 2M   # space left to the TI-Nspire OS with "max"
 ```
 
 When there is not enough free space for the size asked for, `max` is used.
-The minimal Linux needs about 2 MB, OpenWrt about 6 MB: on a Touchpad or a
-Clickpad (32 MB of flash, most of it the TI-Nspire OS's), OpenWrt runs with
-an 8 MB image, with about 2 MB left for your files.
+The image is never smaller than what the system needs (`min`, set in the
+file: 3 MB for the minimal Linux, 7 MB for OpenWrt, 1 MB less without
+fastfetch); without the free space for it, Linux runs from RAM. On a
+Touchpad or a Clickpad (32 MB of flash, most of it the TI-Nspire OS's),
+OpenWrt runs with an 8 MB image.
 To change the size later, or to start over with a clean system, delete
 `rootfs.img` (`openwrt.img`) in the TI-Nspire file browser and start Linux
 again. Without the image file (or when it cannot be written to), Linux runs

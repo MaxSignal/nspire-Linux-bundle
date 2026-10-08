@@ -80,8 +80,8 @@ jobs:
         with:
           name: rootfs
           path: |
-            out/rootfs.cpio.gz
-            out/openwrt.cpio.gz
+            out/*.cpio.gz
+            out/*.min-kib
             out/openwrt.version
           if-no-files-found: error
 

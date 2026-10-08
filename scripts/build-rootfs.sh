@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build a static BusyBox and pack the root filesystem as a gzipped cpio
 # archive (an initramfs passed as initrd by the loader), with fastfetch.
-# Input: $OUT/fastfetch (build-fastfetch.sh)
+# Input: $OUT/fastfetch (build-fastfetch.sh), $OUT/kernel-headers
 # Output: $OUT/rootfs.cpio.gz (with fastfetch), $OUT/rootfs-noff.cpio.gz
 # (without), $OUT/rootfs*.min-kib (the space each needs in an image),
 # $WORK/rootfs-base.list (for the OpenWrt initrd)
@@ -41,14 +41,18 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 [ -x "$GEN" ] || { echo "gen_init_cpio not found (run build-kernel.sh first)" >&2; exit 1; }
 
 [ -f "$OUT/fastfetch" ] || { echo "run build-fastfetch.sh first" >&2; exit 1; }
-# Reads the payload of a new image (OpenWrt)
-"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s -o "$WORK/nspire-payload" \
-	"$TOP/rootfs/tools/nspire-payload.c"
+# nspire-payload reads the payload of a new image (OpenWrt), and
+# nspire-nandinfo shows the layout of the TI-Nspire OS filesystem
+for t in nspire-payload nspire-nandinfo; do
+	"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s \
+		-isystem "$OUT/kernel-headers/include" -o "$WORK/$t" "$TOP/rootfs/tools/$t.c"
+done
 LIST=$WORK/rootfs-base.list
 {
 	cat "$TOP/rootfs/devices.list"
 	echo "file /bin/busybox $BB/busybox 0755 0 0"
 	echo "file /sbin/nspire-payload $WORK/nspire-payload 0755 0 0"
+	echo "file /sbin/nspire-nandinfo $WORK/nspire-nandinfo 0755 0 0"
 	# Overlay: directories first, then files (scripts keep their mode)
 	(cd "$TOP/rootfs/overlay" && find . -mindepth 1 -type d | sort | sed 's|^\.||') |
 		while read -r d; do

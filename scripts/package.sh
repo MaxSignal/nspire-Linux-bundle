@@ -4,7 +4,8 @@
 # system and OpenWrt use different file names so that they can be installed
 # side by side. Each comes with fastfetch, and without (-noff).
 # Input: $OUT/{linuxloader2.tns,zImage,nspire-*.dtb,kernel.release} and
-#        $OUT/{rootfs,rootfs-noff,openwrt,openwrt-noff}.{cpio.gz,min-kib}
+#        $OUT/{rootfs,rootfs-noff,openwrt,openwrt-noff}.{cpio.gz,min-kib},
+#        $OUT/openwrt{,-noff}.tar.gz
 # Output: $OUT/nspire-linux-<release>[-no-fastfetch].zip,
 #         $OUT/nspire-openwrt-<version>-<release>[-no-fastfetch].zip
 # Usage: package.sh [busybox|busybox-noff|openwrt|openwrt-noff]...
@@ -46,6 +47,14 @@ for variant; do
 	cp "$OUT/$SRC.cpio.gz" "$STAGE/linux/$INITRD.tns"
 	sed -e "s|@IMAGE@|$IMAGE|" -e "s|@MIN@|$(cat "$OUT/$SRC.min-kib")K|" \
 		"$TOP/boot/rootimg.cfg" > "$STAGE/linux/$PREFIX.cfg.tns"
+	# OpenWrt's root filesystem, written into the new image by the loader
+	if [ -f "$OUT/$SRC.tar.gz" ]; then
+		cp "$OUT/$SRC.tar.gz" "$STAGE/linux/openwrt.tar.gz.tns"
+		cat >> "$STAGE/linux/$PREFIX.cfg.tns" <<CFG
+# The root filesystem, written into the image when it is created
+payload = /documents/linux/openwrt.tar.gz.tns
+CFG
+	fi
 	for m in cx tp clp; do
 		cp "$OUT/nspire-$m.dtb" "$STAGE/linux/nspire-$m.dtb.tns"
 		sed -e "s|@SYSTEM@|$SYSTEM|" -e "s|@CFG@|$PREFIX.cfg.tns|" -e "s|@INITRD@|$INITRD.tns|" \

@@ -41,10 +41,14 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 [ -x "$GEN" ] || { echo "gen_init_cpio not found (run build-kernel.sh first)" >&2; exit 1; }
 
 [ -f "$OUT/fastfetch" ] || { echo "run build-fastfetch.sh first" >&2; exit 1; }
+# Reads the payload of a new image (OpenWrt)
+"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s -o "$WORK/nspire-payload" \
+	"$TOP/rootfs/tools/nspire-payload.c"
 LIST=$WORK/rootfs-base.list
 {
 	cat "$TOP/rootfs/devices.list"
 	echo "file /bin/busybox $BB/busybox 0755 0 0"
+	echo "file /sbin/nspire-payload $WORK/nspire-payload 0755 0 0"
 	# Overlay: directories first, then files (scripts keep their mode)
 	(cd "$TOP/rootfs/overlay" && find . -mindepth 1 -type d | sort | sed 's|^\.||') |
 		while read -r d; do

@@ -9,17 +9,37 @@ mount -t devtmpfs devtmpfs /dev
 # To the kernel log: shown on every console, and kept in dmesg
 say() { echo "init: $*" > /dev/kmsg 2>/dev/null || echo "init: $*"; }
 
-# What to fill a new root filesystem with: an OpenWrt root filesystem when
-# this initramfs carries one, else this initramfs itself.
+# The root filesystem comes as an archive (OpenWrt) or is this initramfs
+# itself. The archive is in this initramfs, or, too large for the RAM the
+# loader has, it is the payload the loader wrote into a new image (named in
+# /payload-name), taken out before the image is formatted.
+archive=
+[ -f /payload/rootfs.tar.gz ] && archive=/payload/rootfs.tar.gz
+payload=$(cat /payload-name 2>/dev/null)
+
+get_payload() {
+	[ -n "$archive" ] || [ -z "$payload" ] && return 0
+	say "reading $payload from the image"
+	if nspire-payload /dev/tifs0 > /run/rootfs.tar.gz; then
+		archive=/run/rootfs.tar.gz
+	else
+		rm -f /run/rootfs.tar.gz
+		say "the image does not hold $payload: delete it from the TI-Nspire file browser and boot again"
+	fi
+}
+
+# Fill a new root filesystem
 populate() {
-	if [ -f /payload/rootfs.tar.gz ]; then
-		say "unpacking OpenWrt"
-		tar -xzf /payload/rootfs.tar.gz -C "$1" || return 1
+	if [ -n "$archive" ]; then
+		say "unpacking $(basename "${payload:-the root filesystem}" .tar.gz)"
+		tar -xzf "$archive" -C "$1" || return 1
+	elif [ -n "$payload" ]; then
+		return 1
 	else
 		for e in /*; do
 			case "$e" in
 			/proc|/sys|/dev|/newroot|/payload) mkdir -p "$1$e" ;;
-			/rootfs-kib) ;;
+			/rootfs-kib|/payload-name) ;;
 			*) cp -a "$e" "$1/" || return 1 ;;
 			esac
 		done
@@ -35,9 +55,11 @@ switch_to() {
 	exec switch_root "$1" /sbin/init
 }
 boot_ram() {
-	if [ -f /payload/rootfs.tar.gz ]; then
+	if [ -n "$archive" ]; then
 		mount -t tmpfs -o size=75% tmpfs /newroot && populate /newroot &&
-			switch_to /newroot
+			rm -f /run/rootfs.tar.gz && switch_to /newroot
+	elif [ -n "$payload" ]; then
+		say "without $payload, only a minimal shell"
 	fi
 	exec /sbin/init
 }
@@ -63,6 +85,7 @@ fi
 ro=$(cat /sys/block/tifs0/ro)
 # No ext2 superblock magic: a new image (it holds the loader's tags)
 if [ "$(hexdump -s 1080 -n 2 -e '1/2 "%04x"' /dev/tifs0)" != ef53 ]; then
+	get_payload
 	if [ "$ro" = 1 ]; then
 		say "the image is read-only and not formatted (see dmesg | grep tifs), running from RAM"
 		boot_ram
@@ -75,6 +98,7 @@ if [ "$(hexdump -s 1080 -n 2 -e '1/2 "%04x"' /dev/tifs0)" != ef53 ]; then
 		say "the image is too small for this system ($size KiB, $need KiB needed), running from RAM"
 		boot_ram
 	fi
+	[ -n "$payload" ] && [ -z "$archive" ] && boot_ram
 	say "first boot: formatting $path"
 	mkfs.ext2 -q -L nspire-linux /dev/tifs0 && mount -t ext2 /dev/tifs0 /newroot &&
 		populate /newroot || {
@@ -82,17 +106,19 @@ if [ "$(hexdump -s 1080 -n 2 -e '1/2 "%04x"' /dev/tifs0)" != ef53 ]; then
 		umount /newroot 2>/dev/null
 		boot_ram
 	}
+	rm -f /run/rootfs.tar.gz
 else
 	mount -t ext2 -o "$([ "$ro" = 1 ] && echo ro || echo rw)" /dev/tifs0 /newroot || {
 		say "cannot mount the image, running from RAM"
 		boot_ram
 	}
 	[ "$ro" = 1 ] && say "the image is read-only (see dmesg | grep tifs)"
-	# Interrupted while filling it the first time: fill it again
+	# Interrupted while filling it the first time: fill it again (a
+	# payload went with the formatting: the image has to be made again)
 	if [ ! -e /newroot/.nspire-installed ] && [ "$ro" = 0 ]; then
 		say "finishing the setup of $path"
 		populate /newroot || {
-			say "setting up the image failed, running from RAM"
+			say "setting up the image failed: delete it from the TI-Nspire file browser and boot again; running from RAM"
 			umount /newroot
 			boot_ram
 		}

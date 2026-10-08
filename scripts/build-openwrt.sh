@@ -1,13 +1,15 @@
 #!/bin/sh
-# Build the initrd of the OpenWrt variant: the BusyBox initrd (for its /init)
-# carrying an OpenWrt root filesystem, which /init unpacks into the Linux
-# image on the first boot, or into RAM when there is no image. The root
+# Build the OpenWrt variant: its root filesystem archive, which the loader
+# writes into a new Linux image (too large for the initrd: the loader gets
+# about 4 MB of RAM on a Touchpad, the kernel included), and the BusyBox
+# initrd, whose /init unpacks it into the image on the first boot, or into
+# RAM when the image is too small for it. The root
 # filesystem is made by the official ImageBuilder of the at91/sam9x target
 # (ARM926EJ-S) from the official packages, without the router ones.
 # Needs the ImageBuilder's host tools: gawk, make, perl, python3, zstd...
 # Input: $WORK/rootfs-base.list (build-rootfs.sh), $OUT/fastfetch
-# Output: $OUT/openwrt.cpio.gz (with fastfetch), $OUT/openwrt-noff.cpio.gz
-# (without), $OUT/openwrt*.min-kib, $OUT/openwrt.version
+# Output: $OUT/openwrt{,-noff}.{cpio.gz,tar.gz,min-kib} (with fastfetch and
+# without), $OUT/openwrt.version
 set -eu
 cd "$(dirname "$0")/.."
 TOP=$(pwd)
@@ -47,13 +49,16 @@ for v in openwrt openwrt-noff; do
 	python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/$v.tar.gz" "$D/overlay" \
 		"$TOP/openwrt/remove"
 	python3 -I "$TOP/scripts/rootfs-size.py" --tar "$D/$v.tar.gz" > "$OUT/$v.min-kib"
+	# The archive goes to the calculator as a file of its own, which the
+	# loader writes into the new image: the initrd only says its name
+	echo openwrt.tar.gz > "$WORK/payload-name"
 	{
 		cat "$WORK/rootfs-base.list"
-		echo "dir /payload 0755 0 0"
-		echo "file /payload/rootfs.tar.gz $D/$v.tar.gz 0644 0 0"
+		echo "file /payload-name $WORK/payload-name 0644 0 0"
 		echo "file /rootfs-kib $OUT/$v.min-kib 0644 0 0"
 	} > "$WORK/$v.list"
 	"$GEN" "$WORK/$v.list" | gzip -9 -n > "$OUT/$v.cpio.gz"
-	echo "$v: $(wc -c < "$OUT/$v.cpio.gz") bytes, $(cat "$OUT/$v.min-kib") KiB needed, OpenWrt $OPENWRT_VERSION"
+	cp "$D/$v.tar.gz" "$OUT/$v.tar.gz"
+	echo "$v: initrd $(wc -c < "$OUT/$v.cpio.gz") bytes, root filesystem $(wc -c < "$OUT/$v.tar.gz") bytes, $(cat "$OUT/$v.min-kib") KiB needed, OpenWrt $OPENWRT_VERSION"
 done
 echo "$OPENWRT_VERSION" > "$OUT/openwrt.version"

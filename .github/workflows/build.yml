@@ -81,6 +81,7 @@ jobs:
           name: rootfs
           path: |
             out/*.cpio.gz
+            out/*.tar.gz
             out/*.min-kib
             out/openwrt.version
           if-no-files-found: error

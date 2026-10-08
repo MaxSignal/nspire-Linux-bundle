@@ -73,14 +73,15 @@ DTS
 	LOG=$T/$name.log
 }
 
-# new_flash MODEL FLASH IMAGE_NAME IMAGE_KIB: a TI-Nspire filesystem holding
-# a new image file, and old copies of pages in all but 4 units
+# new_flash MODEL FLASH IMAGE_NAME IMAGE_KIB [PAYLOAD]: a TI-Nspire filesystem
+# holding a new image file (with the payload the loader writes into it), and
+# old copies of pages in all but 4 units
 new_flash() {
 	rm -f "$2"
 	"$FB" --model "$1" --flash "$2" --kernel /dev/null --dtb /dev/null --timeout 0 \
 		</dev/null >/dev/null 2>&1 || true
 	python3 -I "$TOP/tests/tifs/mkfsimage.py" "$1" "$2" --image-name "$3" --image-kib "$4" \
-		--free-units 4 >/dev/null
+		${5:+--payload "$5"} --free-units 4 >/dev/null
 }
 
 clean() { ! grep -a -q -E "Kernel panic|BUG:|Oops|I/O error|EXT2-fs .*error|nspire-tifs: read-only" "$1"; }
@@ -152,7 +153,7 @@ SCRIPT
 		# NAND, most of it the TI-Nspire OS's) and its 32 MB of RAM
 		for m in ${OPENWRT_MODELS:-cx tp}; do
 		case $m in cx) kib=32768;; *) kib=8192;; esac
-		new_flash $m "$T/openwrt-$m.flash" $image $kib
+		new_flash $m "$T/openwrt-$m.flash" $image $kib "$OUT/openwrt.tar.gz"
 		for b in first second; do
 			boot "openwrt-$m-$b" $m "$initrd" "$T/openwrt-$m.flash" ${OPENWRT_TIMEOUT:-900} " nspire_tifs.path=/documents/linux/$image" <<SCRIPT
 !wait Please press Enter to activate this console.
@@ -170,7 +171,8 @@ SCRIPT
 				grep -a -q "^OS: OpenWrt $OPENWRT_VERSION" "$LOG" &&
 				clean "$LOG" || ok=0
 			if [ $b = first ]; then
-				grep -a -q "init: unpacking OpenWrt" "$LOG" || ok=0
+				grep -a -q "init: reading openwrt.tar.gz from the image" "$LOG" &&
+					grep -a -q "init: unpacking openwrt" "$LOG" || ok=0
 			else
 				grep -a -q "^kept-42" "$LOG" && ! grep -a -q "init: first boot" "$LOG" || ok=0
 			fi
@@ -179,7 +181,7 @@ SCRIPT
 		done
 
 		# A new image too small for OpenWrt: left new, OpenWrt runs from RAM
-		new_flash tp "$T/openwrt-small.flash" $image 4096
+		new_flash tp "$T/openwrt-small.flash" $image 4096 "$OUT/openwrt.tar.gz"
 		boot "openwrt-tp-small" tp "$initrd" "$T/openwrt-small.flash" ${OPENWRT_TIMEOUT:-900} " nspire_tifs.path=/documents/linux/$image" <<SCRIPT
 !wait Please press Enter to activate this console.
 !delay 500

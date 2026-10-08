@@ -59,8 +59,12 @@ overridden from the environment.
    pages of the file's contents, the way FlashFX does it, and never touch
    the TI-Nspire OS's metadata.
 4. The initrd's `/init` formats the image (ext2) if needed and fills it with
-   the root filesystem (with OpenWrt in the OpenWrt variant), then switches
-   to it. Later boots use it as it is. Without an image, when the image is
+   the root filesystem, then switches to it. OpenWrt's root filesystem is
+   too large to go through the loader's RAM (about 4 MB on a Touchpad, the
+   kernel included) in the initrd: it comes as a file of its own
+   (`openwrt.tar.gz.tns`), which the loader writes into the new image
+   (`payload` setting), and which `/init` takes out of it before formatting
+   it. Later boots use it as it is. Without an image, when the image is
    read-only, or when a new image is too small for the system (it is then
    left new, for the loader to grow), the system runs from RAM.
 

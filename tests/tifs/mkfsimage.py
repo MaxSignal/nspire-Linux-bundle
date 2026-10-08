@@ -204,13 +204,22 @@ class Reliance:
         return self.blocks
 
 
-def tagged_image(size):
-    """As linuxloader2 creates it: every chunk tagged, the last one marked."""
+def tagged_image(size, payload=None):
+    """As linuxloader2 creates it: every chunk tagged, the last one marked,
+    and the payload, if any, after the tags (see rootimg.c)."""
     img = bytearray(size)
     chunks = size // TAG_CHUNK
     for i in range(chunks - 1):
         struct.pack_into('<8sII', img, i * TAG_CHUNK, TAG_MAGIC, i, 0)
     struct.pack_into('<8sII', img, (chunks - 1) * TAG_CHUNK, b'NSPLXEND', chunks, 1)
+    if payload is not None:
+        per = TAG_CHUNK - 16
+        if 2 + (len(payload) + per - 1) // per > chunks:
+            sys.exit('the image is too small for the payload')
+        struct.pack_into('<8sII', img, 16, b'NSPLXPAY', len(payload), 0)
+        for n, off in enumerate(range(0, len(payload), per)):
+            part = payload[off:off + per]
+            img[(n + 1) * TAG_CHUNK + 16:(n + 1) * TAG_CHUNK + 16 + len(part)] = part
     return bytes(img)
 
 
@@ -227,7 +236,9 @@ def build(args):
     files = {
         'documents': {
             'linux': {args.image_name: (open(args.image_file, 'rb').read() if args.image_file
-                                        else tagged_image(args.image_kib * 1024)),
+                                        else tagged_image(args.image_kib * 1024,
+                                                          open(args.payload, 'rb').read()
+                                                          if args.payload else None)),
                       'readme.tns': b'hello from the TI side\n'},
             'Examples': {'graph.tns': bytes(rnd.getrandbits(8) for _ in range(9000))},
         },
@@ -346,6 +357,7 @@ def main():
                     help='name of the image file in /documents/linux')
     ap.add_argument('--image-file', help='contents of the image file (default: tagged, '
                     'as linuxloader2 creates it)')
+    ap.add_argument('--payload', help='file the loader writes into the new image')
     ap.add_argument('--block-size', type=int, default=0)
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--free-units', type=int, default=None)

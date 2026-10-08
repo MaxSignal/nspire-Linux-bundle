@@ -42,8 +42,9 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 
 [ -f "$OUT/fastfetch" ] || { echo "run build-fastfetch.sh first" >&2; exit 1; }
 # nspire-payload reads the payload of a new image (OpenWrt), and
-# nspire-nandinfo shows the layout of the TI-Nspire OS filesystem
-for t in nspire-payload nspire-nandinfo; do
+# nspire-nandinfo / nspire-nandraw show the layout of the TI-Nspire OS
+# filesystem (through the NAND driver / the classic models' direct window)
+for t in nspire-payload nspire-nandinfo nspire-nandraw; do
 	"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s \
 		-isystem "$OUT/kernel-headers/include" -o "$WORK/$t" "$TOP/rootfs/tools/$t.c"
 done
@@ -53,6 +54,7 @@ LIST=$WORK/rootfs-base.list
 	echo "file /bin/busybox $BB/busybox 0755 0 0"
 	echo "file /sbin/nspire-payload $WORK/nspire-payload 0755 0 0"
 	echo "file /sbin/nspire-nandinfo $WORK/nspire-nandinfo 0755 0 0"
+	echo "file /sbin/nspire-nandraw $WORK/nspire-nandraw 0755 0 0"
 	# Overlay: directories first, then files (scripts keep their mode)
 	(cd "$TOP/rootfs/overlay" && find . -mindepth 1 -type d | sort | sed 's|^\.||') |
 		while read -r d; do

@@ -44,7 +44,7 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 # nspire-payload reads the payload of a new image (OpenWrt), and
 # nspire-nandinfo / nspire-nandraw show the layout of the TI-Nspire OS
 # filesystem (through the NAND driver / the classic models' direct window)
-for t in nspire-payload nspire-nandinfo nspire-nandraw; do
+for t in nspire-payload nspire-nandinfo nspire-nandraw nspire-nanddma; do
 	"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s \
 		-isystem "$OUT/kernel-headers/include" -o "$WORK/$t" "$TOP/rootfs/tools/$t.c"
 done
@@ -55,6 +55,7 @@ LIST=$WORK/rootfs-base.list
 	echo "file /sbin/nspire-payload $WORK/nspire-payload 0755 0 0"
 	echo "file /sbin/nspire-nandinfo $WORK/nspire-nandinfo 0755 0 0"
 	echo "file /sbin/nspire-nandraw $WORK/nspire-nandraw 0755 0 0"
+	echo "file /sbin/nspire-nanddma $WORK/nspire-nanddma 0755 0 0"
 	# Overlay: directories first, then files (scripts keep their mode)
 	(cd "$TOP/rootfs/overlay" && find . -mindepth 1 -type d | sort | sed 's|^\.||') |
 		while read -r d; do

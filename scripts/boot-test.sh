@@ -1,7 +1,8 @@
 #!/bin/sh
 # Boot the kernel, device trees and initrds on the Firebird emulator, the way
 # linuxloader2 hands them over (initrd and command line in /chosen):
-#  - busybox: every model boots from RAM and reaches a shell; then, with a
+#  - busybox: every model boots from RAM and reaches a shell (with swap in
+#    zram and nspire-sleepd running); then, with a
 #    synthetic TI-Nspire filesystem holding a new image file (as the loader
 #    creates it), the first boot formats and fills the image, and a second
 #    boot runs from it and finds what the first one wrote; then the flash is
@@ -11,7 +12,8 @@
 #    free unit, sequence numbers per region, discard records, regions with
 #    data in all their pages); the others as Goplat describes FlashFX;
 #  - openwrt: the same two boots on the CX and on the Touchpad (8 MB image),
-#    up to a login shell; and with an image too small for it, which is left
+#    up to a login shell (with swap in zram and nspire-sleepd running); and
+#    with an image too small for it, which is left
 #    new while OpenWrt runs from RAM.
 # Usage: boot-test.sh [busybox] [openwrt]   (default: the initrds that were built)
 # BOOT_TEST_MODELS limits the models of the busybox test (default: cx tp clp).
@@ -115,7 +117,7 @@ for variant; do
 			case $m in cx) lcd="0xC0000018 0x0000192D";; *) lcd="0xC000001C 0x00000855";; esac
 			boot "$m-ram" $m "$initrd" "$T/$m.flash" 120 "" <<SCRIPT
 !wait nspire:~#
-echo "lcd \$(devmem ${lcd% *})"; uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; fastfetch --pipe --logo none -s os:kernel:host:cpu:memory; echo CHECK-\$((40+2))
+echo "lcd \$(devmem ${lcd% *})"; uname -r; tr -d '\0' < /proc/device-tree/model; echo; cat /proc/mtd | wc -l; ls /sys/class/rtc /sys/class/leds /sys/bus/iio/devices; ip -o link | cut -d' ' -f2; ps | grep -q "[u]dhcpc -i usb0" && echo dhcp-client-running; grep -q zram0 /proc/swaps && echo zram-swap-on; ps | grep -q "[n]spire-sleepd" && echo sleepd-running; fastfetch --pipe --logo none -s os:kernel:host:cpu:memory; echo CHECK-\$((40+2))
 !wait CHECK-42
 !delay 300
 !screenshot $T/$m-ram.ppm
@@ -126,6 +128,7 @@ SCRIPT
 			   grep -a -q "rtc0" "$LOG" && grep -a -q "green:status" "$LOG" &&
 			   grep -a -q "^6$" "$LOG" && grep -a -q "^usb0:$" "$LOG" &&
 			   grep -a -q "^dhcp-client-running" "$LOG" &&
+			   grep -a -q "^zram-swap-on" "$LOG" && grep -a -q "^sleepd-running" "$LOG" &&
 			   grep -a -q "^Kernel: Linux $REL" "$LOG" && clean "$LOG"; then
 				pass "busybox $m from RAM"
 			else
@@ -186,7 +189,9 @@ SCRIPT
 !delay 500
 
 !wait root@
-n=0; until ubus call system board >/dev/null 2>&1 || [ \$n -ge 300 ]; do sleep 1; n=\$((n+1)); done; grep " / " /proc/mounts; ubus call system board | grep -E 'release|"kernel"|description'; echo "hostname \$(uci get system.@system[0].hostname)"; echo "wan \$(uci get network.wan.device) \$(uci get network.wan.proto)"; fastfetch --pipe --logo none -s os:kernel:memory:disk; [ -e /root/note ] && cat /root/note; echo kept-\$((6*7)) > /root/note; sync; echo CHECK-\$((40+2))
+dmesg -n 1; n=0; until ubus call system board >/dev/null 2>&1 && ps | grep -q "[n]spire-sleepd" || [ \$n -ge 300 ]; do sleep 1; n=\$((n+1)); done; grep " / " /proc/mounts; ubus call system board | grep -E 'release|"kernel"|description'; echo "hostname \$(uci get system.@system[0].hostname)"; echo "wan \$(uci get network.wan.device) \$(uci get network.wan.proto)"; fastfetch --pipe --logo none -s os:kernel:memory:disk; echo PART-\$((1))
+!wait PART-1
+grep -q zram0 /proc/swaps && echo zram-swap-on; ps | grep -q "[n]spire-sleepd" && echo sleepd-running; [ -e /root/note ] && cat /root/note; echo kept-\$((6*7)) > /root/note; sync; echo CHECK-\$((40+2))
 !wait CHECK-42
 !delay 300
 !quit 0
@@ -195,6 +200,7 @@ SCRIPT
 			grep -a -q "^/dev/\(tifs0\|root\) / ext2 rw" "$LOG" && grep -a -q "\"kernel\": \"$REL\"" "$LOG" &&
 				grep -a -q "OpenWrt $OPENWRT_VERSION" "$LOG" && grep -a -q "^hostname nspire$" "$LOG" && grep -a -q "^wan usb0 dhcp$" "$LOG" &&
 				grep -a -q "^OS: OpenWrt $OPENWRT_VERSION" "$LOG" &&
+				grep -a -q "^zram-swap-on" "$LOG" && grep -a -q "^sleepd-running" "$LOG" &&
 				clean "$LOG" || ok=0
 			if [ $b = first ]; then
 				grep -a -q "init: reading openwrt.tar.gz from the image" "$LOG" &&

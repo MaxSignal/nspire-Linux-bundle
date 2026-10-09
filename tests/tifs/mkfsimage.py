@@ -8,7 +8,7 @@ The image contains /documents/linux/rootfs.img.tns as linuxloader2 creates it
 (every 4 KiB chunk tagged), plus a few other files, older copies of pages and
 a unit caught in the middle of a reclaim, which the reader has to resolve.
 """
-import argparse, ctypes, os, random, struct, sys
+import argparse, ctypes, hashlib, json, os, random, struct, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 _ham = ctypes.CDLL(os.path.join(HERE, 'libhamming.so'))
@@ -16,6 +16,7 @@ _ham.ecc_sw_hamming_calculate.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes
 
 TAG_CHUNK = 4096
 TAG_MAGIC = b'NSPLXIMG'
+KEEP_ALLOC = 0x5ff0     # pages FlashFX marks so on a real Touchpad
 UNIT_MAGIC = 0x48E2
 
 
@@ -292,6 +293,10 @@ def build(args):
     seq = 1000000           # above the stale units made for --free-units
     free = list(phys_units)
     region_units = {}
+    keep = []               # raw pages writers must leave alone
+
+    def keep_page(p):
+        keep.append((p, hashlib.md5(raw[p * geo.raw:(p + 1) * geo.raw]).hexdigest()))
 
     def new_unit(region, erase_count=3):
         nonlocal seq
@@ -314,6 +319,15 @@ def build(args):
             for data in copies:
                 if nxt == geo.ppb:
                     unit, nxt = new_unit(region), 1
+                # Now and then a page marked 5ff0, as a real Touchpad's
+                # FlashFX writes among data pages: not a data page
+                if rnd.random() < 0.01:
+                    write_page(unit, nxt, bytes(rnd.getrandbits(8) for _ in range(geo.page)),
+                               KEEP_ALLOC)
+                    keep_page(unit * geo.ppb + nxt)
+                    nxt += 1
+                    if nxt == geo.ppb:
+                        unit, nxt = new_unit(region), 1
                 write_page(unit, nxt, data, 0x4000 | idx)
                 nxt += 1
 
@@ -323,6 +337,16 @@ def build(args):
     present = [i for i in range(geo.region_pages) if i in logical][:5]
     for n, idx in enumerate(present):
         write_page(unit, 1 + n, logical[idx], 0x4000 | idx)
+
+    # A unit without a header and without data pages, as a real Touchpad's
+    # last one: data in its first page only, no allocation info
+    unit = free.pop(0)
+    p = unit * geo.ppb
+    raw[p * geo.raw:p * geo.raw + geo.page] = bytes(rnd.getrandbits(8) for _ in range(geo.page))
+    spare = bytearray(b'\xff' * geo.oob)
+    spare[3], spare[7] = 0x1e, 0x0f
+    raw[p * geo.raw + geo.page:(p + 1) * geo.raw] = spare
+    keep_page(p)
 
     # Leave only --free-units free units: the others get filled with stale
     # copies (sequence numbers below every real unit), so writers have to
@@ -349,9 +373,10 @@ def build(args):
     with open(args.flash, 'r+b') as f:
         f.seek(geo.part_offset * geo.raw)
         f.write(raw)
+    with open(args.flash + '.keep.json', 'w') as f:
+        json.dump(keep, f)
 
     # What the TI side holds, for checking that writers left it alone
-    import hashlib, json
 
     def walk(node, prefix):
         for name, child in node.items():

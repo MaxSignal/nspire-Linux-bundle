@@ -12,7 +12,7 @@ import argparse, ctypes, hashlib, json, os, struct, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from mkfsimage import Geometry, hamming, UNIT_MAGIC  # noqa: E402
+from mkfsimage import Geometry, hamming, KEEP_ALLOC, UNIT_MAGIC  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument('model')
@@ -55,6 +55,8 @@ for u in range(geo.units):
         alloc = struct.unpack_from('<H', sp)[0]
         if alloc == 0xffff:
             continue
+        if alloc == KEEP_ALLOC and sp[2] == (~(sp[0] ^ sp[1])) & 0xff:
+            continue    # not a data page
         if alloc & 0xf000 != 0x4000 or sp[2] != (~(sp[0] ^ sp[1])) & 0xff:
             print(f'unit {u} page {i}: bad allocation info {sp[:4].hex()}')
             errors += 1
@@ -165,6 +167,14 @@ for path, md5 in manifest.items():
     elif hashlib.md5(files[path]).hexdigest() != md5:
         print(f'{path}: CHANGED')
         errors += 1
+# The pages writers must leave alone (marked 5ff0, a unit without header)
+if os.path.exists(args.flash + '.keep.json'):
+    keep = json.load(open(args.flash + '.keep.json'))
+    for p, md5 in keep:
+        if hashlib.md5(part[p * geo.raw:(p + 1) * geo.raw]).hexdigest() != md5:
+            print(f'page {p} to leave alone: CHANGED')
+            errors += 1
+    print(f'{len(keep)} pages to leave alone checked')
 img = files[args.image]
 if args.extract:
     with open(args.extract, 'wb') as f:

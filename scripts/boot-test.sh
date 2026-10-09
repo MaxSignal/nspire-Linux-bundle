@@ -4,7 +4,9 @@
 #  - busybox: every model boots from RAM and reaches a shell; then, with a
 #    synthetic TI-Nspire filesystem holding a new image file (as the loader
 #    creates it), the first boot formats and fills the image, and a second
-#    boot runs from it and finds what the first one wrote;
+#    boot runs from it and finds what the first one wrote; then the flash is
+#    read independently of the driver (tests/tifs/readfs.py): the TI-Nspire
+#    OS's files and the FlashFX pages to leave alone are unchanged;
 #  - openwrt: the same two boots on the CX and on the Touchpad (8 MB image),
 #    up to a login shell; and with an image too small for it, which is left
 #    new while OpenWrt runs from RAM.
@@ -144,6 +146,16 @@ SCRIPT
 				pass "busybox $m second boot from the image"
 			else
 				fail "busybox $m second boot from the image" "$LOG"
+			fi
+
+			# After Linux wrote to the flash, read independently of the
+			# driver: the TI-Nspire OS's files and the pages to leave
+			# alone are unchanged
+			if python3 -I "$TOP/tests/tifs/readfs.py" $m "$T/$m.flash" \
+				--image /documents/linux/$image > "$T/$m-readfs.log" 2>&1; then
+				pass "busybox $m TI files and pages to leave alone unchanged"
+			else
+				fail "busybox $m TI files and pages to leave alone unchanged" "$T/$m-readfs.log"
 			fi
 		done
 		;;

@@ -4,10 +4,9 @@ following the Hackspire documentation, and write it into the "filesystem"
 partition of a Firebird flash image (raw pages: data followed by spare).
 
 The points the documentation leaves open are parameters (see tifs_spec.md).
-The image contains /documents/linux/rootfs.img.tns ("document" on the flash,
-as on a real TI-Nspire) as linuxloader2 creates it (every 4 KiB chunk
-tagged), plus a few other files, older copies of pages and a unit caught in
-the middle of a reclaim, which the reader has to resolve.
+The image contains /documents/linux/rootfs.img.tns as linuxloader2 creates it
+(every 4 KiB chunk tagged), plus a few other files, older copies of pages and
+a unit caught in the middle of a reclaim, which the reader has to resolve.
 """
 import argparse, ctypes, os, random, struct, sys
 
@@ -237,9 +236,8 @@ def build(args):
     logical_size = regions * geo.region_pages * geo.page
 
     rel = Reliance(logical_size, args.block_size)
-    # The TI-Nspire OS's /documents is "document" on the flash
     files = {
-        'document': {
+        'documents': {
             'linux': {args.image_name: (open(args.image_file, 'rb').read() if args.image_file
                                         else tagged_image(args.image_kib * 1024,
                                                           open(args.payload, 'rb').read()
@@ -349,7 +347,7 @@ def build(args):
 
     print(f'{args.model}: {geo.units} units of {geo.ppb} pages, {regions} regions, '
           f'{len(free)} free units, '
-          f'Reliance block {rel.bs}, {rel.next} blocks used, image {len(files["document"]["linux"][args.image_name]) // 1024} KiB, '
+          f'Reliance block {rel.bs}, {rel.next} blocks used, image {len(files["documents"]["linux"][args.image_name]) // 1024} KiB, '
           f'{len(logical)} logical pages')
 
 

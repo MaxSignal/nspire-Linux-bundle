@@ -112,11 +112,12 @@ def inode_data(ino):
     for level in range(mode - 1):
         nxt = []
         for p in ptrs:
-            if p == 0 or len(nxt) * bs >= size:
+            if p == 0xffffffff:
                 break
             b = read(p * bs, bs)
             assert b[:4] in (b'INDI', b'DBLI')
-            nxt += struct.unpack_from('<%dI' % ((bs - 4) // 4), b, 4)
+            # the inode's 0x40-byte header, then pointers
+            nxt += struct.unpack_from('<%dI' % ((bs - 0x40) // 4), b, 0x40)
         ptrs = nxt
     nblk = (size + bs - 1) // bs
     return b''.join(read(p * bs, bs) for p in ptrs[:nblk])[:size]

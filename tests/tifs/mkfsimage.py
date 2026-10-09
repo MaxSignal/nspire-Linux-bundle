@@ -103,12 +103,19 @@ class Reliance:
         assert len(data) <= self.bs
         self.blocks[b] = bytes(data) + b'\x00' * (self.bs - len(data))
 
+    @staticmethod
+    def ptrs(blocks, n):
+        """A pointer area: unused pointers are ffffffff, as on a real
+        TI-Nspire."""
+        return struct.pack('<%dI' % n, *(blocks + [0xffffffff] * (n - len(blocks))))
+
     def write_data(self, data):
         """Store data, return (mode, pointer area content)."""
         bs = self.bs
         inline_max = bs - 0x40
         ptrs_per_inode = (bs - 0x40) // 4
-        ptrs_per_block = (bs - 4) // 4
+        # Indirect blocks have the inode's 0x40-byte header too
+        ptrs_per_block = ptrs_per_inode
         if len(data) <= inline_max:
             return 0, data
         nblk = (len(data) + bs - 1) // bs
@@ -117,23 +124,23 @@ class Reliance:
             self.put(first + i, data[i * bs:(i + 1) * bs])
         blocks = list(range(first, first + nblk))
         if nblk <= ptrs_per_inode:
-            return 1, struct.pack('<%dI' % nblk, *blocks)
+            return 1, self.ptrs(blocks, ptrs_per_inode)
         indis = []
         for i in range(0, nblk, ptrs_per_block):
             b = self.alloc()
             chunk = blocks[i:i + ptrs_per_block]
-            self.put(b, b'INDI' + struct.pack('<%dI' % len(chunk), *chunk))
+            self.put(b, b'INDI'.ljust(0x40, b'\x00') + self.ptrs(chunk, ptrs_per_block))
             indis.append(b)
         if len(indis) <= ptrs_per_inode:
-            return 2, struct.pack('<%dI' % len(indis), *indis)
+            return 2, self.ptrs(indis, ptrs_per_inode)
         dblis = []
         for i in range(0, len(indis), ptrs_per_block):
             b = self.alloc()
             chunk = indis[i:i + ptrs_per_block]
-            self.put(b, b'DBLI' + struct.pack('<%dI' % len(chunk), *chunk))
+            self.put(b, b'DBLI'.ljust(0x40, b'\x00') + self.ptrs(chunk, ptrs_per_block))
             dblis.append(b)
         assert len(dblis) <= ptrs_per_inode
-        return 3, struct.pack('<%dI' % len(dblis), *dblis)
+        return 3, self.ptrs(dblis, ptrs_per_inode)
 
     def inode(self, index, data, is_dir=False, block=None):
         mode, area = self.write_data(data)

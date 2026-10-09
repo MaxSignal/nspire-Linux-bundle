@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Adapt an OpenWrt root filesystem archive to the TI-Nspire: drop the
 kernel modules (built for another kernel) and the files listed in
-REMOVE_LIST, and add or replace the files of an overlay directory, keeping
-the ownership and modes of the archive.
+REMOVE_LIST, and add or replace the files (and symbolic links) of an
+overlay directory, keeping the ownership and modes of the archive.
 
 Usage: openwrt-rootfs.py IN.tar.gz OUT.tar.gz OVERLAY_DIR REMOVE_LIST
 """
@@ -41,7 +41,7 @@ with tarfile.open(src, 'r:gz') as tin, \
         if name in remove:
             remove.discard(name)
             continue
-        if name in extra:
+        if name in extra and not os.path.islink(extra[name]):
             path = extra.pop(name)
             data = open(path, 'rb').read()
             m.size = len(data)
@@ -51,6 +51,12 @@ with tarfile.open(src, 'r:gz') as tin, \
             continue
         tout.addfile(m, tin.extractfile(m) if m.isreg() else None)
     for name, path in extra.items():
+        if os.path.islink(path):
+            ti = tarfile.TarInfo(name)
+            ti.type, ti.linkname = tarfile.SYMTYPE, os.readlink(path)
+            ti.uid, ti.gid, ti.mtime, ti.mode = 0, 0, 0, 0o777
+            tout.addfile(ti)
+            continue
         data = open(path, 'rb').read()
         ti = tarfile.TarInfo(name)
         ti.size, ti.uid, ti.gid, ti.mtime = len(data), 0, 0, 0

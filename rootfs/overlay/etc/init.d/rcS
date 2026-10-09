@@ -9,6 +9,8 @@ mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
 hostname -F /etc/hostname
 # Swap compressed in RAM, before anything takes much of it
 nspire-zram
+# ctrl+ON: sleep, ON: wake up
+nspire-sleepd &
 model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null)
 nspire-console
 echo "Linux $(uname -r) on ${model:-TI-Nspire}"

@@ -45,7 +45,7 @@ for v in openwrt openwrt-noff; do
 	cp -r "$TOP/openwrt/overlay" "$D/overlay"
 	mkdir -p "$D/overlay/usr/bin" "$D/overlay/usr/sbin"
 	cp "$TOP/rootfs/overlay/usr/sbin/nspire-console" "$TOP/rootfs/overlay/usr/sbin/nspire-zram" \
-		"$D/overlay/usr/sbin/"
+		"$WORK/nspire-sleepd" "$D/overlay/usr/sbin/"
 	[ $v = openwrt ] && cp "$OUT/fastfetch" "$D/overlay/usr/bin/"
 	python3 -I "$TOP/scripts/openwrt-rootfs.py" "$ROOTFS" "$D/$v.tar.gz" "$D/overlay" \
 		"$TOP/openwrt/remove"

@@ -46,10 +46,11 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 [ -x "$GEN" ] || { echo "gen_init_cpio not found (run build-kernel.sh first)" >&2; exit 1; }
 
 [ -f "$OUT/fastfetch" ] || { echo "run build-fastfetch.sh first" >&2; exit 1; }
-# nspire-payload reads the payload of a new image (OpenWrt); in a debug
+# nspire-payload reads the payload of a new image (OpenWrt), nspire-sleepd
+# puts the calculator to sleep on ctrl+ON; in a debug
 # build, nspire-nandinfo / nspire-nandraw / nspire-nanddma show the layout
 # of the TI-Nspire OS filesystem and try the NAND controller
-TOOLS="rootfs/tools/nspire-payload"
+TOOLS="rootfs/tools/nspire-payload rootfs/tools/nspire-sleepd"
 [ "$DEBUG" = 1 ] && TOOLS="$TOOLS rootfs/debug/tools/nspire-nandinfo rootfs/debug/tools/nspire-nandraw rootfs/debug/tools/nspire-nanddma"
 for t in $TOOLS; do
 	"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s \

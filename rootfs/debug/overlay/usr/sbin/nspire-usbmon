@@ -1,0 +1,26 @@
+#!/bin/sh
+# nspire-usbmon [LOG]: log the USB device controller's state every second,
+# one line a change, to LOG (default: the screen): gadget state, interrupts,
+# USBSTS, PORTSC, OTGSC (without the 1 ms timer bit), USBCMD, ENDPTLISTADDR,
+# ENDPTSETUPSTAT, ENDPTCTRL0, and the capabilities and next dTD of the
+# endpoint 0 queue heads (out, in). With a LOG file, dmesg goes to
+# LOG.dmesg when the gadget state changes. For a boot that lost the USB
+# link: log into the image, and read it later through the TI-Nspire OS.
+log=${1:-/dev/tty0}
+r() { devmem 0xb0000${1#0x} | cut -c3-; }
+m() { devmem $(printf 0x%x $1) | cut -c3-; }
+o= ost=
+while :; do
+	st=$(cat /sys/class/udc/*/state 2>/dev/null)
+	irq=$(grep usb /proc/interrupts | tr -s ' ' | cut -d' ' -f3)
+	q=$((0x$(r 0x158)))
+	qh="$(m $q)/$(m $((q + 8))) $(m $((q + 64)))/$(m $((q + 72)))"
+	s="$st $irq $(r 0x144) $(r 0x184) $(printf %08X $((0x$(r 0x1a4) & ~0x2000))) $(r 0x140) $(r 0x158) $(r 0x1ac) $(r 0x1c0) $qh"
+	if [ "$s" != "$o" ]; then
+		echo "$(cut -d' ' -f1 /proc/uptime) $s" >> "$log"
+		[ "$log" != /dev/tty0 ] && [ "$st" != "$ost" ] && dmesg > "$log.dmesg"
+		[ "$log" != /dev/tty0 ] && sync
+	fi
+	o=$s ost=$st
+	sleep 1
+done

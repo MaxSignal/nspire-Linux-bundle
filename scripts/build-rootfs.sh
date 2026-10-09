@@ -49,9 +49,10 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 # nspire-payload reads the payload of a new image (OpenWrt), nspire-sleepd
 # puts the calculator to sleep on ctrl+ON; in a debug
 # build, nspire-nandinfo / nspire-nandraw / nspire-nanddma show the layout
-# of the TI-Nspire OS filesystem and try the NAND controller
+# of the TI-Nspire OS filesystem and try the NAND controller, and
+# nspire-nandstray shows what its DMA writes beyond its buffer
 TOOLS="rootfs/tools/nspire-payload rootfs/tools/nspire-sleepd"
-[ "$DEBUG" = 1 ] && TOOLS="$TOOLS rootfs/debug/tools/nspire-nandinfo rootfs/debug/tools/nspire-nandraw rootfs/debug/tools/nspire-nanddma"
+[ "$DEBUG" = 1 ] && TOOLS="$TOOLS rootfs/debug/tools/nspire-nandinfo rootfs/debug/tools/nspire-nandraw rootfs/debug/tools/nspire-nanddma rootfs/debug/tools/nspire-nandstray"
 for t in $TOOLS; do
 	"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s \
 		-isystem "$OUT/kernel-headers/include" -o "$WORK/${t##*/}" "$TOP/$t.c"

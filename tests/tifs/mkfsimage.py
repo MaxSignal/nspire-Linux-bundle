@@ -416,15 +416,19 @@ def build_real(args):
     """A filesystem laid out as on a real Touchpad (tifscheck.py reads it):
     937 units of the partition's 960 in use, none free, the last 23 left
     out (the very last with data in its first page and no header); regions
-    of 16 or 17 units holding data in all their pages, a few stale copies
-    and discard records; sequence numbers counting per region."""
+    of 16 units (the last one 8) holding data in all their pages, a few
+    stale copies and discard records; sequence numbers counting per
+    region. One region has a 17th unit, the spare: only stale copies, and
+    named at 0x24 by the region's newest unit."""
     geo, prm = Geometry(args.model), Params()
     prm.ecc_sm = True
     rnd = random.Random(args.seed)
     used_units = 937
-    regions = used_units // geo.per_region          # 58
-    extra = used_units - regions * geo.per_region   # regions with a 17th unit
-    logical_size = regions * geo.region_pages * geo.page
+    regions = (used_units - 1 + geo.per_region - 1) // geo.per_region   # 59
+    last_units = used_units - 1 - (regions - 1) * geo.per_region        # 8
+    client_blocks = geo.region_pages // geo.per_region                  # 61
+    spare_region = rnd.randrange(regions - 1)
+    logical_size = ((regions - 1) * geo.region_pages + last_units * client_blocks) * geo.page
     rel = Reliance(logical_size, args.block_size)
     files = {
         'documents': {
@@ -459,12 +463,23 @@ def build_real(args):
     phys = list(range(used_units))
     rnd.shuffle(phys)
     for r in range(regions):
-        nunits = geo.per_region + (1 if r < extra else 0)
+        nunits = geo.per_region if r < regions - 1 else last_units
         units = [phys.pop() for _ in range(nunits)]
         seq = 300 + rnd.randrange(2000)
         events = []
         discarded = set()
-        for idx in range(geo.region_pages):
+        npages = geo.region_pages if r < regions - 1 else nunits * client_blocks
+        if r == spare_region:
+            # the spare, older than the others: copies of pages written since
+            spare = phys.pop()
+            write_page(spare, 0, real_header(geo, r * geo.region_pages * geo.page,
+                                             rnd.randrange(20, 90), seq, used_units,
+                                             rnd.randrange(used_units)), UNIT_MAGIC)
+            for p in range(1, geo.ppb):
+                write_page(spare, p, bytes(rnd.getrandbits(8) for _ in range(geo.page)),
+                           0x4000 | rnd.randrange(npages))
+            seq += 1
+        for idx in range(npages):
             lp = r * geo.region_pages + idx
             # every page holds data: the volume's, else old contents
             data = logical.get(lp) or bytes(rnd.getrandbits(8) for _ in range(geo.page))
@@ -483,9 +498,12 @@ def build_real(args):
             events.remove(next(e for e in events if e[0] == 'S'))
         k = 0
         for n, unit in enumerate(units):
+            # the newest unit names the spare; others, any unit (or none)
+            nxt = spare if r == spare_region and n == nunits - 1 else \
+                rnd.choice([rnd.randrange(used_units), 0xffffffff])
             write_page(unit, 0, real_header(geo, r * geo.region_pages * geo.page,
                                             rnd.randrange(20, 90), seq + n, used_units,
-                                            rnd.randrange(used_units)), UNIT_MAGIC)
+                                            nxt), UNIT_MAGIC)
             for p in range(1, geo.ppb):
                 if k == len(events):
                     break

@@ -73,17 +73,6 @@ for r, us in byreg.items():
     seqs = [units[u]['seq'] for u in us]
     if len(seqs) != len(set(seqs)):
         err('region %d: sequence numbers repeat' % r)
-newest = {r: max(us, key=lambda u: units[u]['seq']) for r, us in byreg.items()}
-nexts = Counter(units[n]['next'] for n in newest.values())
-for r, n in newest.items():
-    x = units[n]['next']
-    if x >= NU:
-        err('region %d: next unit %d past the end' % (r, x))
-    elif x in newest.values():
-        pass    # the TI-Nspire OS does name such units
-    elif nexts[x] > 1:
-        print('note: unit %d is next of %d regions' % (x, nexts[x]))
-
 # Pages: copies and discard records, per region in order
 ev = defaultdict(list)
 for u, i in units.items():
@@ -117,6 +106,30 @@ for r, es in ev.items():
     for j, v in state.items():
         if v:
             m[r * RP + j] = v
+
+# As boot2 mounts it: each region has per_region units (the last one what is
+# left), one region one more, the spare, which its newest unit names
+PR = struct.unpack_from('<H', h0, 0x2c)[0]
+NR = max(byreg) + 1
+spare_regions = []
+for r in range(NR):
+    want = PR if r < NR - 1 else len(units) - 1 - (NR - 1) * PR
+    n = len(byreg.get(r, []))
+    if n == want + 1:
+        spare_regions.append(r)
+    elif n != want:
+        err('region %d: %d units, not %d' % (r, n, want))
+if len(spare_regions) != 1:
+    err('%d regions with a spare unit' % len(spare_regions))
+for r in spare_regions:
+    newest = max(byreg[r], key=lambda u: units[u]['seq'])
+    x = units[newest]['next']
+    if x == newest or x not in units or units[x]['region'] != r:
+        err('region %d: the newest unit %d names unit %d as its spare' % (r, newest, x))
+    else:
+        left = sum(1 for v in m.values() if v[0] == x)
+        if left:
+            print('note: spare unit %d still holds %d latest pages' % (x, left))
 
 
 def blk(b):

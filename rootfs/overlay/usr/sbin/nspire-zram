@@ -1,0 +1,10 @@
+#!/bin/sh
+# nspire-zram: swap compressed in RAM (zram, LZ4), half the size of the RAM:
+# what does not fit in the Touchpad's 32 MB is kept compressed rather than
+# ending the processes that hold it.
+[ -e /sys/block/zram0 ] || exit 0
+grep -q '^/dev/zram0 ' /proc/swaps 2>/dev/null && exit 0
+kb=$(sed -n 's/^MemTotal: *\([0-9]*\).*/\1/p' /proc/meminfo)
+echo lz4 > /sys/block/zram0/comp_algorithm 2>/dev/null
+echo $((kb / 2))K > /sys/block/zram0/disksize &&
+	mkswap /dev/zram0 >/dev/null && swapon /dev/zram0

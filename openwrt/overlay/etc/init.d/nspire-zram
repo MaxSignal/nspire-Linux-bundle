@@ -1,0 +1,7 @@
+#!/bin/sh /etc/rc.common
+# Swap compressed in RAM (zram), early in the boot: see /usr/sbin/nspire-zram
+START=11
+
+start() {
+	/usr/sbin/nspire-zram
+}

@@ -399,6 +399,126 @@ def build(args):
           f'{len(logical)} logical pages')
 
 
+def real_header(geo, client_address, erase_count, seq, units, next_unit):
+    """As on a real Touchpad: client address, erase count, a constant,
+    the sequence number within the region, the number of units FlashFX
+    uses, the unit the region goes on with, geometry, checksum at 0x36."""
+    h = bytearray(b'\xff' * geo.page)
+    h[0:16] = b'\xcc\xddDL_FS4.00' + b'\xff' * 5
+    struct.pack_into('<IIIIII', h, 0x10, client_address, erase_count, 4446, seq, units, next_unit)
+    h[0x28:0x2a] = b'\x01\x00'
+    struct.pack_into('<HHHHHH', h, 0x2a, geo.page, geo.per_region, 0, geo.ppb, geo.client, geo.ppb - 1)
+    struct.pack_into('<H', h, 0x36, sum(h[0:0x36]) & 0xffff)
+    return bytes(h)
+
+
+def build_real(args):
+    """A filesystem laid out as on a real Touchpad (tifscheck.py reads it):
+    937 units of the partition's 960 in use, none free, the last 23 left
+    out (the very last with data in its first page and no header); regions
+    of 16 or 17 units holding data in all their pages, a few stale copies
+    and discard records; sequence numbers counting per region."""
+    geo, prm = Geometry(args.model), Params()
+    prm.ecc_sm = True
+    rnd = random.Random(args.seed)
+    used_units = 937
+    regions = used_units // geo.per_region          # 58
+    extra = used_units - regions * geo.per_region   # regions with a 17th unit
+    logical_size = regions * geo.region_pages * geo.page
+    rel = Reliance(logical_size, args.block_size)
+    files = {
+        'documents': {
+            'linux': {args.image_name: (open(args.image_file, 'rb').read() if args.image_file
+                                        else tagged_image(args.image_kib * 1024,
+                                                          open(args.payload, 'rb').read()
+                                                          if args.payload else None)),
+                      'readme.tns': b'hello from the TI side\n'},
+            'Examples': {'graph.tns': bytes(rnd.getrandbits(8) for _ in range(9000))},
+        },
+        'phoenix': {'syst': {'settings': b'\x01\x02\x03' * 100}},
+    }
+    rel.tree(files)
+    blocks = rel.finish()
+    logical = {}
+    for b, data in blocks.items():
+        off = b * rel.bs
+        for i in range(0, rel.bs, geo.page):
+            page_no, inpage = divmod(off + i, geo.page)
+            buf = bytearray(logical.get(page_no, b'\xff' * geo.page))
+            chunk = data[i:i + geo.page]
+            buf[inpage:inpage + len(chunk)] = chunk
+            logical[page_no] = bytes(buf)
+
+    raw = bytearray(b'\xff' * (geo.part_pages * geo.raw))
+
+    def write_page(unit, idx, data, alloc):
+        p = unit * geo.ppb + idx
+        raw[p * geo.raw:p * geo.raw + geo.page] = data
+        raw[p * geo.raw + geo.page:(p + 1) * geo.raw] = spare_for(geo, prm, alloc, data)
+
+    phys = list(range(used_units))
+    rnd.shuffle(phys)
+    for r in range(regions):
+        nunits = geo.per_region + (1 if r < extra else 0)
+        units = [phys.pop() for _ in range(nunits)]
+        seq = 300 + rnd.randrange(2000)
+        events = []
+        discarded = set()
+        for idx in range(geo.region_pages):
+            lp = r * geo.region_pages + idx
+            # every page holds data: the volume's, else old contents
+            data = logical.get(lp) or bytes(rnd.getrandbits(8) for _ in range(geo.page))
+            if rnd.random() < 0.02:
+                events.append(('S', idx, bytes(b ^ 0x5a for b in data)))     # stale copy
+            events.append(('C', idx, data))
+            if lp not in logical and rnd.random() < 0.004:
+                discarded.add(idx)
+                bitmap = bytearray(geo.page)
+                for j in discarded:
+                    bitmap[j // 8] |= 1 << (j % 8)
+                events.append(('D', None, bytes(bitmap)))
+        # as full as a real region: drop stale copies to leave a few pages free
+        cap = nunits * (geo.ppb - 1) - 3
+        while len(events) > cap:
+            events.remove(next(e for e in events if e[0] == 'S'))
+        k = 0
+        for n, unit in enumerate(units):
+            write_page(unit, 0, real_header(geo, r * geo.region_pages * geo.page,
+                                            rnd.randrange(20, 90), seq + n, used_units,
+                                            rnd.randrange(used_units)), UNIT_MAGIC)
+            for p in range(1, geo.ppb):
+                if k == len(events):
+                    break
+                kind, idx, data = events[k]
+                write_page(unit, p, data, KEEP_ALLOC if kind == 'D' else 0x4000 | idx)
+                k += 1
+        if k < len(events):
+            sys.exit('region %d does not fit' % r)
+    # The last unit: data in its first page, no header
+    p = (geo.units - 1) * geo.ppb
+    raw[p * geo.raw:p * geo.raw + geo.page] = bytes(rnd.getrandbits(8) for _ in range(geo.page))
+    raw[p * geo.raw + geo.page + 3] = 0x1e
+    raw[p * geo.raw + geo.page + 7] = 0x0f
+
+    with open(args.flash, 'r+b') as f:
+        f.seek(geo.part_offset * geo.raw)
+        f.write(raw)
+    manifest = {}
+
+    def walk(node, prefix):
+        for name, child in node.items():
+            path = prefix + '/' + name
+            if isinstance(child, dict):
+                walk(child, path)
+            else:
+                manifest[path] = hashlib.md5(child).hexdigest()
+    walk(files, '')
+    with open(args.flash + '.manifest.json', 'w') as f:
+        json.dump(manifest, f, indent=1, sort_keys=True)
+    print('real layout: %d regions in %d units, image %d KiB' % (regions, used_units,
+                                                                len(files['documents']['linux'][args.image_name]) // 1024))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('model', choices=['cx', 'tp', 'clp'])
@@ -412,10 +532,16 @@ def main():
     ap.add_argument('--block-size', type=int, default=0)
     ap.add_argument('--seed', type=int, default=1)
     ap.add_argument('--free-units', type=int, default=None)
+    ap.add_argument('--layout', choices=['goplat', 'real'], default='goplat',
+                    help='real: as on a real Touchpad (no free unit, per region '
+                    'sequence numbers, discard records)')
     args = ap.parse_args()
     if not args.block_size:
         args.block_size = 2048 if args.model == 'cx' else 512
-    build(args)
+    if args.layout == 'real':
+        build_real(args)
+    else:
+        build(args)
 
 
 if __name__ == '__main__':

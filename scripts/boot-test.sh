@@ -5,8 +5,11 @@
 #    synthetic TI-Nspire filesystem holding a new image file (as the loader
 #    creates it), the first boot formats and fills the image, and a second
 #    boot runs from it and finds what the first one wrote; then the flash is
-#    read independently of the driver (tests/tifs/readfs.py): the TI-Nspire
-#    OS's files and the FlashFX pages to leave alone are unchanged;
+#    read independently of the driver (tests/tifs/readfs.py, tifscheck.py):
+#    the TI-Nspire OS's files and the FlashFX pages to leave alone are
+#    unchanged. The Touchpad's filesystem is laid out as on a real one (no
+#    free unit, sequence numbers per region, discard records, regions with
+#    data in all their pages); the others as Goplat describes FlashFX;
 #  - openwrt: the same two boots on the CX and on the Touchpad (8 MB image),
 #    up to a login shell; and with an image too small for it, which is left
 #    new while OpenWrt runs from RAM.
@@ -76,14 +79,26 @@ DTS
 }
 
 # new_flash MODEL FLASH IMAGE_NAME IMAGE_KIB [PAYLOAD]: a TI-Nspire filesystem
-# holding a new image file (with the payload the loader writes into it), and
-# old copies of pages in all but 4 units
+# holding a new image file (with the payload the loader writes into it): on
+# the Touchpad, laid out as on a real one; else with old copies of pages in
+# all but 4 units
 new_flash() {
 	rm -f "$2"
 	"$FB" --model "$1" --flash "$2" --kernel /dev/null --dtb /dev/null --timeout 0 \
 		</dev/null >/dev/null 2>&1 || true
+	case $1 in tp) layout="--layout real";; *) layout="--free-units 4";; esac
 	python3 -I "$TOP/tests/tifs/mkfsimage.py" "$1" "$2" --image-name "$3" --image-kib "$4" \
-		${5:+--payload "$5"} --free-units 4 >/dev/null
+		${5:+--payload "$5"} $layout >/dev/null
+}
+
+# check_flash MODEL FLASH IMAGE_NAME: read the flash independently of the
+# driver; only the image may have changed
+check_flash() {
+	case $1 in
+	tp) python3 -I "$TOP/tests/tifs/tifscheck.py" "$2" --compare "$2.manifest.json" \
+		--allow "/documents/linux/$3" ;;
+	*) python3 -I "$TOP/tests/tifs/readfs.py" $1 "$2" --image "/documents/linux/$3" ;;
+	esac
 }
 
 clean() { ! grep -a -q -E "Kernel panic|BUG:|Oops|I/O error|EXT2-fs .*error|nspire-tifs: read-only" "$1"; }
@@ -151,8 +166,7 @@ SCRIPT
 			# After Linux wrote to the flash, read independently of the
 			# driver: the TI-Nspire OS's files and the pages to leave
 			# alone are unchanged
-			if python3 -I "$TOP/tests/tifs/readfs.py" $m "$T/$m.flash" \
-				--image /documents/linux/$image > "$T/$m-readfs.log" 2>&1; then
+			if check_flash $m "$T/$m.flash" $image > "$T/$m-readfs.log" 2>&1; then
 				pass "busybox $m TI files and pages to leave alone unchanged"
 			else
 				fail "busybox $m TI files and pages to leave alone unchanged" "$T/$m-readfs.log"
@@ -190,6 +204,11 @@ SCRIPT
 			fi
 			if [ $ok = 1 ]; then pass "openwrt $m $b boot"; else fail "openwrt $m $b boot" "$LOG"; fi
 		done
+		if check_flash $m "$T/openwrt-$m.flash" $image > "$T/openwrt-$m-check.log" 2>&1; then
+			pass "openwrt $m TI files unchanged"
+		else
+			fail "openwrt $m TI files unchanged" "$T/openwrt-$m-check.log"
+		fi
 		done
 
 		# A new image too small for OpenWrt: left new, OpenWrt runs from RAM

@@ -109,6 +109,16 @@ class Reliance:
         TI-Nspire."""
         return struct.pack('<%dI' % n, *(blocks + [0xffffffff] * (n - len(blocks))))
 
+    def node(self, sig, ptrs):
+        """An indirect block (the inode's 0x40-byte header, then
+        pointers); returns its index."""
+        index = self.next_index
+        self.next_index += 1
+        b = self.alloc()
+        self.put(b, sig.ljust(0x40, b'\x00') + ptrs)
+        self.inodes[index] = b
+        return index
+
     def write_data(self, data):
         """Store data, return (mode, pointer area content)."""
         bs = self.bs
@@ -125,20 +135,18 @@ class Reliance:
         blocks = list(range(first, first + nblk))
         if nblk <= ptrs_per_inode:
             return 1, self.ptrs(blocks, ptrs_per_inode)
+        # Indirect blocks are named by an index, like inodes, as on a real
+        # TI-Nspire; data blocks by their number
         indis = []
         for i in range(0, nblk, ptrs_per_block):
-            b = self.alloc()
             chunk = blocks[i:i + ptrs_per_block]
-            self.put(b, b'INDI'.ljust(0x40, b'\x00') + self.ptrs(chunk, ptrs_per_block))
-            indis.append(b)
+            indis.append(self.node(b'INDI', self.ptrs(chunk, ptrs_per_block)))
         if len(indis) <= ptrs_per_inode:
             return 2, self.ptrs(indis, ptrs_per_inode)
         dblis = []
         for i in range(0, len(indis), ptrs_per_block):
-            b = self.alloc()
             chunk = indis[i:i + ptrs_per_block]
-            self.put(b, b'DBLI'.ljust(0x40, b'\x00') + self.ptrs(chunk, ptrs_per_block))
-            dblis.append(b)
+            dblis.append(self.node(b'DBLI', self.ptrs(chunk, ptrs_per_block)))
         assert len(dblis) <= ptrs_per_inode
         return 3, self.ptrs(dblis, ptrs_per_inode)
 

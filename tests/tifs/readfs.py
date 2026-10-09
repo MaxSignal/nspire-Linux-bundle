@@ -114,8 +114,9 @@ def inode_data(ino):
         for p in ptrs:
             if p == 0xffffffff:
                 break
-            b = read(p * bs, bs)
-            assert b[:4] in (b'INDI', b'DBLI')
+            # indirect blocks are named by an index, like inodes
+            b = read(struct.unpack_from('<I', table, 4 * p)[0] * bs, bs)
+            assert b[:4] == (b'DBLI' if level < mode - 2 else b'INDI')
             # the inode's 0x40-byte header, then pointers
             nxt += struct.unpack_from('<%dI' % ((bs - 0x40) // 4), b, 0x40)
         ptrs = nxt

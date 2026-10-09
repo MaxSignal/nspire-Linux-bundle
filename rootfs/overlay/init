@@ -125,4 +125,11 @@ else
 	fi
 fi
 
+# Never switch to a root that cannot start: init would end, and the kernel
+# with it
+if [ ! -e /newroot/.nspire-installed ] || [ ! -x /newroot/sbin/init ]; then
+	say "the image is not set up completely (see dmesg | grep tifs), running from RAM"
+	umount /newroot
+	boot_ram
+fi
 switch_to /newroot

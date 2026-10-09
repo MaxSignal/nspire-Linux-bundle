@@ -116,7 +116,8 @@ class Reliance:
         index = self.next_index
         self.next_index += 1
         b = self.alloc()
-        self.put(b, sig.ljust(0x40, b'\x00') + ptrs)
+        # the header holds the block's own index, as on a real Touchpad
+        self.put(b, (sig + struct.pack('<I', index)).ljust(0x40, b'\x00') + ptrs)
         self.inodes[index] = b
         return index
 

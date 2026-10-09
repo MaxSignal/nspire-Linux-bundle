@@ -20,7 +20,7 @@
 
 #define MAX_DEVS	8
 #define BLANK_VT	"12"	/* a console nobody uses */
-#define BLANK		"\033[?25l\033[0;37;47m\033[2J"
+#define BLANK		"\033[?25l\033[0m\033[2J"
 #define BIT_SET(a, b)	((a)[(b) / 8] >> ((b) % 8) & 1)
 
 static int has_keys(int fd)
@@ -37,9 +37,9 @@ static int has_keys(int fd)
  * The screen: the classic models' LCD can neither be turned off (their
  * "backlight" is the contrast) nor stopped and started again without
  * shifting the picture, and shows nothing where its pixels have the
- * console's white background. So the screen goes to an empty console with
- * that background, filled up to its edges, without the kernel's messages,
- * while asleep.
+ * console's background, which nspire-console makes white. So the screen
+ * goes to an empty console with the same colours, filled up to its edges,
+ * without the kernel's messages, while asleep.
  */
 static void fill_screen(void)
 {
@@ -90,7 +90,9 @@ static void sleep_now(void)
 {
 	int fd, level, vt;
 
-	/* an empty console, white, cursor hidden */
+	/* an empty console, with the console's colours, cursor hidden */
+	if (system("/usr/sbin/nspire-console /dev/tty" BLANK_VT) < 0)
+		perror("nspire-sleepd: nspire-console");
 	fd = open("/dev/tty" BLANK_VT, O_WRONLY | O_NOCTTY);
 	if (fd >= 0) {
 		if (write(fd, BLANK, sizeof(BLANK) - 1) < 0)

@@ -48,7 +48,7 @@ overridden from the environment.
    `openwrt.cfg.tns`) and, the first time, creates an image file in the
    TI-Nspire filesystem (`rootfs.img.tns` / `openwrt.img.tns`), showing a
    progress bar:
-   - `size = max`: all the free space minus `reserve` (2 MB by default);
+   - `size = max`: all the free space minus `reserve` (1 MB in the configuration files);
    - `size = 64M` and so on: that size, or the same as `max` when there is
      not enough free space;
    - never less than `min`, the space the system needs (computed by the

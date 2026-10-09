@@ -62,7 +62,7 @@ bauds). `fastfetch --logo none` fits the screen better than `fastfetch`.
 
 ```
 size = max     # all the free space, minus "reserve"; or a size such as 64M
-reserve = 1M   # space left to the TI-Nspire OS with "max"
+reserve = 2M   # space left to the TI-Nspire OS with "max"
 ```
 
 When there is not enough free space for the size asked for, `max` is used.

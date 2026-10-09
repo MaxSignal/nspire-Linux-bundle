@@ -16,7 +16,7 @@ _ham.ecc_sw_hamming_calculate.argtypes = [ctypes.c_char_p, ctypes.c_uint, ctypes
 
 TAG_CHUNK = 4096
 TAG_MAGIC = b'NSPLXIMG'
-KEEP_ALLOC = 0x5ff0     # pages FlashFX marks so on a real Touchpad
+KEEP_ALLOC = 0x5ff0     # discard records, as on a real Touchpad
 UNIT_MAGIC = 0x48E2
 
 
@@ -320,11 +320,15 @@ def build(args):
             for data in copies:
                 if nxt == geo.ppb:
                     unit, nxt = new_unit(region), 1
-                # Now and then a page marked 5ff0, as a real Touchpad's
-                # FlashFX writes among data pages: not a data page
+                # Now and then a discard record (5ff0), as a real Touchpad's
+                # FlashFX writes among data pages: a bitmap of the region's
+                # pages, set for those without data
                 if rnd.random() < 0.01:
-                    write_page(unit, nxt, bytes(rnd.getrandbits(8) for _ in range(geo.page)),
-                               KEEP_ALLOC)
+                    bitmap = bytearray(geo.page)
+                    for j in range(geo.region_pages):
+                        if region * geo.region_pages + j not in logical:
+                            bitmap[j // 8] |= 1 << (j % 8)
+                    write_page(unit, nxt, bytes(bitmap), KEEP_ALLOC)
                     keep_page(unit * geo.ppb + nxt)
                     nxt += 1
                     if nxt == geo.ppb:

@@ -100,6 +100,8 @@ if [ "$(hexdump -s 1080 -n 2 -e '1/2 "%04x"' /dev/tifs0)" != ef53 ]; then
 	fi
 	[ -n "$payload" ] && [ -z "$archive" ] && boot_ram
 	say "first boot: formatting $path"
+	# Its old contents need no room on the flash any more
+	blkdiscard /dev/tifs0 2>/dev/null
 	mkfs.ext2 -q -L nspire-linux /dev/tifs0 && mount -t ext2 /dev/tifs0 /newroot &&
 		populate /newroot || {
 		say "setting up the image failed, running from RAM"

@@ -4,9 +4,10 @@ following the Hackspire documentation, and write it into the "filesystem"
 partition of a Firebird flash image (raw pages: data followed by spare).
 
 The points the documentation leaves open are parameters (see tifs_spec.md).
-The image contains /documents/linux/rootfs.img.tns as linuxloader2 creates it
-(every 4 KiB chunk tagged), plus a few other files, older copies of pages and
-a unit caught in the middle of a reclaim, which the reader has to resolve.
+The image contains /documents/linux/rootfs.img.tns ("document" on the flash,
+as on a real TI-Nspire) as linuxloader2 creates it (every 4 KiB chunk
+tagged), plus a few other files, older copies of pages and a unit caught in
+the middle of a reclaim, which the reader has to resolve.
 """
 import argparse, ctypes, os, random, struct, sys
 
@@ -150,7 +151,7 @@ class Reliance:
     def dirent(name, index, is_dir):
         """As on a real TI-Nspire: 0x80, a checksum (?), the length of the
         entry (u32 at 3, a multiple of 16), the length of the name (u16 at
-        7), attributes (1: in use, 2: directory) at 9, the inode index (u32
+        7), attributes (8: in use, 2: directory) at 9, the inode index (u32
         at 11), 01 00 at 16, then the UTF-16 name at 18."""
         n = name.encode('utf-16-le')
         length = (18 + len(n) + 15) // 16 * 16
@@ -169,11 +170,7 @@ class Reliance:
         return self._tree(node, 2)
 
     def _tree(self, node, index):
-        # An entry not in use first, as TI's OS seems to leave them: the
-        # driver must step over it
-        e = bytearray(self.dirent('deleted', 0, False))
-        e[0] = e[9] = 0
-        entries = bytes(e)
+        entries = b''
         for name, child in node.items():
             ci = self.next_index
             self.next_index += 1
@@ -240,8 +237,9 @@ def build(args):
     logical_size = regions * geo.region_pages * geo.page
 
     rel = Reliance(logical_size, args.block_size)
+    # The TI-Nspire OS's /documents is "document" on the flash
     files = {
-        'documents': {
+        'document': {
             'linux': {args.image_name: (open(args.image_file, 'rb').read() if args.image_file
                                         else tagged_image(args.image_kib * 1024,
                                                           open(args.payload, 'rb').read()
@@ -351,7 +349,7 @@ def build(args):
 
     print(f'{args.model}: {geo.units} units of {geo.ppb} pages, {regions} regions, '
           f'{len(free)} free units, '
-          f'Reliance block {rel.bs}, {rel.next} blocks used, image {len(files["documents"]["linux"][args.image_name]) // 1024} KiB, '
+          f'Reliance block {rel.bs}, {rel.next} blocks used, image {len(files["document"]["linux"][args.image_name]) // 1024} KiB, '
           f'{len(logical)} logical pages')
 
 

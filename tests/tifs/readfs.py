@@ -5,7 +5,7 @@ documentation (Goplat, Hackspire) and the conventions of mkfsimage.py.
 
 Checks: unit header checksums, the ECC of every latest page copy, that every
 file of the manifest still has its original contents, and prints the MD5 of
-/documents/linux/rootfs.img.tns without its last 4 KiB chunk (what Linux
+/document/linux/rootfs.img.tns without its last 4 KiB chunk (what Linux
 sees as /dev/tifs0).
 """
 import argparse, ctypes, hashlib, json, os, struct, sys
@@ -17,7 +17,7 @@ from mkfsimage import Geometry, hamming, UNIT_MAGIC  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument('model')
 ap.add_argument('flash')
-ap.add_argument('--image', default='/documents/linux/rootfs.img.tns')
+ap.add_argument('--image', default='/document/linux/rootfs.img.tns')
 ap.add_argument('--extract', help='also write the image file to this file')
 args = ap.parse_args()
 geo = Geometry(args.model)
@@ -137,13 +137,8 @@ files = {}
 def walk(ino, path):
     d = inode_data(ino)
     pos = 0
-    while pos + 18 <= len(d):
+    while pos + 18 <= len(d) and d[pos] == 0x80:
         length, m = struct.unpack_from('<I', d, pos + 3)[0], struct.unpack_from('<H', d, pos + 7)[0]
-        if length < 18 or length % 16 or pos + length > len(d):
-            break
-        if d[pos] != 0x80:      # not in use: step over it, as the driver does
-            pos += length
-            continue
         attr, idx = d[pos + 9], struct.unpack_from('<I', d, pos + 11)[0]
         name = d[pos + 18:pos + 18 + m].decode('utf-16-le')
         child = by_index(idx)

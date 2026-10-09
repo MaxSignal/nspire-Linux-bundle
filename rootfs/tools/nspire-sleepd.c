@@ -2,18 +2,25 @@
  * nspire-sleepd: ctrl+ON puts the calculator to sleep, as in the
  * TI-Nspire OS, and ON wakes it up. Watches the input devices with the ON
  * key (KEY_POWER) or a ctrl key, and on ON pressed while ctrl is held,
- * writes "mem" to /sys/power/state: processes and devices stop (the
- * screen too) until the ON key's interrupt wakes the system.
+ * blanks the screen and writes "mem" to /sys/power/state: processes and
+ * devices stop until the ON key's interrupt wakes the system up, and the
+ * screen shows what it showed again.
  */
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <linux/vt.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <sys/klog.h>
 #include <unistd.h>
 
 #define MAX_DEVS	8
+#define BLANK_VT	"12"	/* a console nobody uses */
+#define BLANK		"\033[?25l\033[0;37;47m\033[2J"
 #define BIT_SET(a, b)	((a)[(b) / 8] >> ((b) % 8) & 1)
 
 static int has_keys(int fd)
@@ -26,16 +33,85 @@ static int has_keys(int fd)
 	       BIT_SET(keys, KEY_RIGHTCTRL);
 }
 
-static void sleep_now(void)
+/*
+ * The screen: the classic models' LCD can neither be turned off (their
+ * "backlight" is the contrast) nor stopped and started again without
+ * shifting the picture, and shows nothing where its pixels have the
+ * console's white background. So the screen goes to an empty console with
+ * that background, filled up to its edges, without the kernel's messages,
+ * while asleep.
+ */
+static void fill_screen(void)
 {
-	int fd = open("/sys/power/state", O_WRONLY);
+	static unsigned char buf[4096];
+	int fd = open("/dev/fb0", O_RDWR), i;
 
 	if (fd < 0)
 		return;
-	/* returns once the system is awake again */
-	if (write(fd, "mem", 3) < 0)
-		perror("nspire-sleepd: /sys/power/state");
+	/* the background, as the console drew it in the top left corner */
+	if (read(fd, buf, 4) == 4) {
+		for (i = 4; i < (int)sizeof(buf); i++)
+			buf[i] = buf[i % 4];
+		lseek(fd, 0, SEEK_SET);
+		while (write(fd, buf, sizeof(buf)) > 0)
+			;
+	}
 	close(fd);
+}
+static int console_level(int level)
+{
+	FILE *f = fopen("/proc/sys/kernel/printk", "r");
+	int old = 7;
+
+	if (f) {
+		if (fscanf(f, "%d", &old) != 1)
+			old = 7;
+		fclose(f);
+	}
+	klogctl(8, NULL, level);	/* SYSLOG_ACTION_CONSOLE_LEVEL */
+	return old;
+}
+
+static int switch_vt(int vt)
+{
+	struct vt_stat st = { 0 };
+	int fd = open("/dev/tty0", O_RDWR);
+
+	if (fd < 0)
+		return 0;
+	ioctl(fd, VT_GETSTATE, &st);
+	if (ioctl(fd, VT_ACTIVATE, vt) == 0)
+		ioctl(fd, VT_WAITACTIVE, vt);
+	close(fd);
+	return st.v_active;
+}
+
+static void sleep_now(void)
+{
+	int fd, level, vt;
+
+	/* an empty console, white, cursor hidden */
+	fd = open("/dev/tty" BLANK_VT, O_WRONLY | O_NOCTTY);
+	if (fd >= 0) {
+		if (write(fd, BLANK, sizeof(BLANK) - 1) < 0)
+			perror("nspire-sleepd: tty" BLANK_VT);
+		close(fd);
+	}
+	level = console_level(1);
+	vt = switch_vt(atoi(BLANK_VT));
+	fill_screen();
+
+	/* returns once the system is awake again */
+	fd = open("/sys/power/state", O_WRONLY);
+	if (fd >= 0) {
+		if (write(fd, "mem", 3) < 0)
+			perror("nspire-sleepd: /sys/power/state");
+		close(fd);
+	}
+
+	if (vt > 0)
+		switch_vt(vt);
+	console_level(level);
 }
 
 int main(void)

@@ -1,3 +1,3 @@
 TI-Nspire Linux. Battery: cat /sys/class/power_supply/*/voltage_now
 Files are kept in the image file /documents/linux/*.img (see df /), or in
-RAM when there is none. Screen off: echo 4 > /sys/class/backlight/*/bl_power
+RAM when there is none. Sleep: ctrl+ON, wake up: ON.

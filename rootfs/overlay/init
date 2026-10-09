@@ -5,6 +5,8 @@
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs devtmpfs /dev
+# The console's colours, from the start, whatever system follows
+/usr/sbin/nspire-console
 
 # To the kernel log: shown on every console, and kept in dmesg
 say() { echo "init: $*" > /dev/kmsg 2>/dev/null || echo "init: $*"; }

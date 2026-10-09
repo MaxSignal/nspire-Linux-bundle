@@ -1,0 +1,7 @@
+#!/bin/sh
+# nspire-flashdump: the whole NAND chip to stdout, raw (no ECC
+# correction): each page's data followed by its spare area, partitions in
+# order, as the Firebird emulator keeps a flash image. For nspire-pc-link.
+for m in $(sed -n 's/^\(mtd[0-9]*\):.*/\1/p' /proc/mtd); do
+	nanddump -n -o -f - /dev/$m 2>/dev/null
+done

@@ -18,3 +18,5 @@ if [ -d /sys/class/net/usb0 ]; then
 	ip link set usb0 up
 	udhcpc -i usb0 -b -x hostname:"$(hostname)" >/dev/null 2>&1
 fi
+# Local additions (the debug build's)
+[ -f /etc/init.d/rcS.local ] && . /etc/init.d/rcS.local

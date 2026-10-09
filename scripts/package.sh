@@ -37,6 +37,7 @@ for variant; do
 	*) echo "unknown variant $variant" >&2; exit 1;;
 	esac
 	case $variant in *-noff) NAME=$NAME-no-fastfetch SRC=$SRC-noff;; esac
+	[ "$DEBUG" = 1 ] && NAME=$NAME-debug
 	STAGE=$WORK/package/$NAME
 	rm -rf "$STAGE"
 	mkdir -p "$STAGE/linux"

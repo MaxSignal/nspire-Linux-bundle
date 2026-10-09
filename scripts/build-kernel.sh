@@ -16,11 +16,14 @@ B=$WORK/linux-build
 rm -rf "$B"
 make -C "$SRC" O="$B" ARCH=arm CROSS_COMPILE="$KERNEL_CROSS_COMPILE" \
 	multi_v4t_defconfig nspire.config
-"$SRC"/scripts/kconfig/merge_config.sh -m -O "$B" "$B/.config" "$TOP/config/kernel.config"
+CONFIGS=$TOP/config/kernel.config
+[ "$DEBUG" = 1 ] && CONFIGS="$CONFIGS $TOP/config/kernel-debug.config"
+# shellcheck disable=SC2086
+"$SRC"/scripts/kconfig/merge_config.sh -m -O "$B" "$B/.config" $CONFIGS
 make -C "$SRC" O="$B" ARCH=arm CROSS_COMPILE="$KERNEL_CROSS_COMPILE" olddefconfig
 
 # Fail if a requested option did not make it into the configuration
-for f in "$SRC/arch/arm/configs/nspire.config" "$TOP/config/kernel.config"; do
+for f in "$SRC/arch/arm/configs/nspire.config" $CONFIGS; do
 	grep '^CONFIG_' "$f" | while IFS= read -r line; do
 		grep -qxF "$line" "$B/.config" || { echo "missing in .config: $line" >&2; exit 1; }
 	done

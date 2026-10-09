@@ -1,0 +1,2 @@
+# Debug build: the computer on the USB cable gets a shell right away
+nspire-pc-link >/dev/null 2>&1

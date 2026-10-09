@@ -1,0 +1,38 @@
+#!/bin/sh
+# nspire-pc-link: give the computer at the other end of the USB cable a
+# shell on this calculator, to look into it from there. The calculator
+# takes 192.168.7.1 on usb0 and hands the computer an address
+# (192.168.7.2-9, no gateway: the computer's other connections stay as
+# they are); each connection to port 2323 gets a shell, its commands read
+# from the connection. Only the cable reaches it.
+#
+# From the computer:
+#   echo 'dmesg | grep tifs' | nc -q 30 192.168.7.1 2323
+#   echo nspire-flashdump | nc -q 30 192.168.7.1 2323 > flash.bin
+# Stop with "nspire-pc-link stop" (or reboot).
+if [ "$1" = stop ]; then
+	killall udhcpd 2>/dev/null
+	kill $(cat /run/nspire-pc-link.pid 2>/dev/null) 2>/dev/null
+	rm -f /run/nspire-pc-link.pid
+	ip addr del 192.168.7.1/24 dev usb0 2>/dev/null
+	echo "stopped"
+	exit 0
+fi
+[ -d /sys/class/net/usb0 ] || { echo "no usb0: USB in host mode?" >&2; exit 1; }
+killall udhcpc 2>/dev/null
+ip link set usb0 up
+ip addr flush dev usb0
+ip addr add 192.168.7.1/24 dev usb0
+cat > /tmp/udhcpd.conf <<CONF
+interface usb0
+start 192.168.7.2
+end 192.168.7.9
+max_leases 8
+lease_file /tmp/udhcpd.leases
+option subnet 255.255.255.0
+CONF
+touch /tmp/udhcpd.leases
+udhcpd /tmp/udhcpd.conf
+(while :; do nc -l -p 2323 -e /bin/sh; done) >/dev/null 2>&1 &
+echo $! > /run/nspire-pc-link.pid
+echo "ready: from the computer, nc 192.168.7.1 2323"

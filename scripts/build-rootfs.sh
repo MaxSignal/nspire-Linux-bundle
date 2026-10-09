@@ -19,8 +19,12 @@ BB=$WORK/busybox-build
 rm -rf "$BB"
 mkdir -p "$BB"
 make -C "$WORK/busybox-$BUSYBOX_VERSION" O="$BB" allnoconfig >/dev/null
-# Only what rootfs/busybox.config asks for
-while IFS= read -r line; do
+# Only what rootfs/busybox.config asks for (and rootfs/debug/busybox.config
+# in a debug build)
+BBCONFIGS=$TOP/rootfs/busybox.config
+[ "$DEBUG" = 1 ] && BBCONFIGS="$BBCONFIGS $TOP/rootfs/debug/busybox.config"
+# shellcheck disable=SC2086
+cat $BBCONFIGS | while IFS= read -r line; do
 	case "$line" in
 	'# CONFIG_'*' is not set') key=${line#\# }; key=${key%% *};;
 	''|'#'*) continue;;
@@ -28,10 +32,11 @@ while IFS= read -r line; do
 	esac
 	sed -i -e "/^$key=/d" -e "/^# $key is not set/d" "$BB/.config"
 	echo "$line" >> "$BB/.config"
-done < "$TOP/rootfs/busybox.config"
+done
 yes "" | make -C "$BB" CROSS_COMPILE="$ROOTFS_CROSS_COMPILE" oldconfig >/dev/null
 # Fail if an option did not stick (renamed, or unmet dependency)
-grep "^CONFIG_" "$TOP/rootfs/busybox.config" | while IFS= read -r l; do
+# shellcheck disable=SC2086
+grep -h "^CONFIG_" $BBCONFIGS | while IFS= read -r l; do
 	grep -qxF "$l" "$BB/.config" || { echo "busybox option not applied: $l" >&2; exit 1; }
 done
 make -C "$BB" CROSS_COMPILE="$ROOTFS_CROSS_COMPILE" -j"$JOBS" busybox busybox.links
@@ -41,33 +46,39 @@ GEN=${GEN_INIT_CPIO:-$OUT/gen_init_cpio}
 [ -x "$GEN" ] || { echo "gen_init_cpio not found (run build-kernel.sh first)" >&2; exit 1; }
 
 [ -f "$OUT/fastfetch" ] || { echo "run build-fastfetch.sh first" >&2; exit 1; }
-# nspire-payload reads the payload of a new image (OpenWrt), and
-# nspire-nandinfo / nspire-nandraw show the layout of the TI-Nspire OS
-# filesystem (through the NAND driver / the classic models' direct window)
-for t in nspire-payload nspire-nandinfo nspire-nandraw nspire-nanddma; do
+# nspire-payload reads the payload of a new image (OpenWrt); in a debug
+# build, nspire-nandinfo / nspire-nandraw / nspire-nanddma show the layout
+# of the TI-Nspire OS filesystem and try the NAND controller
+TOOLS="rootfs/tools/nspire-payload"
+[ "$DEBUG" = 1 ] && TOOLS="$TOOLS rootfs/debug/tools/nspire-nandinfo rootfs/debug/tools/nspire-nandraw rootfs/debug/tools/nspire-nanddma"
+for t in $TOOLS; do
 	"${ROOTFS_CROSS_COMPILE}gcc" -Os -static -Wall -Werror -s \
-		-isystem "$OUT/kernel-headers/include" -o "$WORK/$t" "$TOP/rootfs/tools/$t.c"
+		-isystem "$OUT/kernel-headers/include" -o "$WORK/${t##*/}" "$TOP/$t.c"
 done
+OVERLAYS=$TOP/rootfs/overlay
+[ "$DEBUG" = 1 ] && OVERLAYS="$OVERLAYS $TOP/rootfs/debug/overlay"
 LIST=$WORK/rootfs-base.list
 {
 	cat "$TOP/rootfs/devices.list"
 	echo "file /bin/busybox $BB/busybox 0755 0 0"
-	echo "file /sbin/nspire-payload $WORK/nspire-payload 0755 0 0"
-	echo "file /sbin/nspire-nandinfo $WORK/nspire-nandinfo 0755 0 0"
-	echo "file /sbin/nspire-nandraw $WORK/nspire-nandraw 0755 0 0"
-	echo "file /sbin/nspire-nanddma $WORK/nspire-nanddma 0755 0 0"
-	# Overlay: directories first, then files (scripts keep their mode)
-	(cd "$TOP/rootfs/overlay" && find . -mindepth 1 -type d | sort | sed 's|^\.||') |
-		while read -r d; do
-			grep -q "^dir $d " "$TOP/rootfs/devices.list" && continue
-			mode=0755; [ "$d" = /root ] && mode=0700
-			echo "dir $d $mode 0 0"
-		done
-	(cd "$TOP/rootfs/overlay" && find . -type f | sort | sed 's|^\.||') |
-		while read -r f; do
-			mode=0644; [ -x "$TOP/rootfs/overlay$f" ] && mode=0755
-			echo "file $f $TOP/rootfs/overlay$f $mode 0 0"
-		done
+	for t in $TOOLS; do
+		echo "file /sbin/${t##*/} $WORK/${t##*/} 0755 0 0"
+	done
+	# Overlays: directories first, then files (scripts keep their mode)
+	for o in $OVERLAYS; do
+		(cd "$o" && find . -mindepth 1 -type d | sed 's|^\.||')
+	done | sort -u | while read -r d; do
+		grep -q "^dir $d " "$TOP/rootfs/devices.list" && continue
+		mode=0755; [ "$d" = /root ] && mode=0700
+		echo "dir $d $mode 0 0"
+	done
+	for o in $OVERLAYS; do
+		(cd "$o" && find . -type f | sort | sed 's|^\.||') |
+			while read -r f; do
+				mode=0644; [ -x "$o$f" ] && mode=0755
+				echo "file $f $o$f $mode 0 0"
+			done
+	done
 	grep '^/' "$BB/busybox.links" | grep -vx /bin/busybox |
 		while read -r l; do echo "slink $l /bin/busybox 0777 0 0"; done
 } > "$LIST"

@@ -34,6 +34,13 @@
 # web interface, nor the kernel modules of the at91 boards
 : "${OPENWRT_PACKAGES:=-dnsmasq -firewall4 -nftables -kmod-nft-offload -odhcpd-ipv6only -ppp -ppp-mod-pppoe -mtd -kmod-usb-ohci -kmod-at91-udc -kmod-usb-gadget-eth -procd-ujail}"
 
+# DEBUG=1: investigation build. The kernel shows what the TI-Nspire
+# filesystem image driver finds where it does not understand the flash,
+# and the minimal system gets nspire-pc-link (a shell for the computer on
+# the USB cable), nspire-flashdump and the NAND tools (rootfs/debug). Its
+# packages are named *-debug. Not for releases.
+: "${DEBUG:=0}"
+
 # Kernel cross compiler (Debian/Ubuntu: gcc-arm-linux-gnueabi)
 : "${KERNEL_CROSS_COMPILE:=arm-linux-gnueabi-}"
 

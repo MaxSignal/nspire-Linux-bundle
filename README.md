@@ -97,6 +97,32 @@ scripts/release-notes.sh    # out/release-notes.md
 
 `KERNEL_SRC` / `LOADER_SRC` select local source trees instead of cloning.
 
+### Debug build
+
+`DEBUG=1` (for every script; best with its own `OUT`, for instance
+`OUT=$PWD/out-debug`) makes an investigation build, never a release: its
+ZIPs are named `*-debug`.
+
+- The kernel shows what the TI-Nspire filesystem image driver finds where
+  it does not understand the flash (`config/kernel-debug.config`).
+- The minimal system gets BusyBox `nc` and `udhcpd`, the NAND tools of
+  `rootfs/debug/tools`, and starts `nspire-pc-link` at boot
+  (`rootfs/debug`): the calculator takes 192.168.7.1 on `usb0`, hands the
+  computer on the USB cable an address by DHCP (no gateway, so its other
+  connections stay as they are) and gives each connection to port 2323 a
+  shell reading its commands from the connection. From the computer:
+
+```sh
+echo 'dmesg | grep tifs' | nc -N 192.168.7.1 2323
+echo nspire-flashdump | nc -N 192.168.7.1 2323 > flash.bin
+echo 'cat /sys/bus/nvmem/devices/nspire-bootrom/nvmem' | nc -N 192.168.7.1 2323 > boot1.bin
+```
+
+`nspire-flashdump` writes the whole NAND chip raw (each page's data and
+spare area) in the layout of the Firebird emulator's flash images. With the
+calculator's boot ROM, Firebird then runs its own boot2 and TI-Nspire OS on
+that flash, which shows whether they still accept what Linux wrote.
+
 ## Tests
 
 `scripts/boot-test.sh` boots on Firebird (a version that can start Linux

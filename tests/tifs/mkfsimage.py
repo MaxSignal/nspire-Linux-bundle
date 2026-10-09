@@ -148,20 +148,23 @@ class Reliance:
 
     @staticmethod
     def dirent(name, index, is_dir):
-        """As on a real TI-Nspire: 0x80, a checksum (?), the length of the
-        entry (u32 at 3, a multiple of 16), the length of the name (u16 at
-        7), attributes (8: in use, 2: directory) at 9, the inode index (u32
-        at 11), 01 00 at 16, then the UTF-16 name at 18."""
+        """As on a real TI-Nspire: units of 16 bytes. The first holds 0x80,
+        a checksum (?), the length of the entry (u32 at 3), the length of
+        the name in bytes (u16 at 7), attributes (1: in use, 2: directory)
+        at 9 and the inode index (u32 at 11); each next unit starts with
+        the number of units left (u16), then holds 7 characters of the
+        UTF-16 name."""
         n = name.encode('utf-16-le')
-        length = (18 + len(n) + 15) // 16 * 16
-        e = bytearray(18)
+        chunks = [n[k:k + 14] for k in range(0, len(n), 14)] or [b'']
+        e = bytearray(16)
         e[0] = 0x80
-        struct.pack_into('<I', e, 3, length)
+        struct.pack_into('<I', e, 3, 16 * (1 + len(chunks)))
         struct.pack_into('<H', e, 7, len(n))
         e[9] = 0x1 | (0x2 if is_dir else 0)
         struct.pack_into('<I', e, 11, index)
-        struct.pack_into('<H', e, 16, 1)
-        return bytes(e) + n + b'\x00' * (length - 18 - len(n))
+        for k, c in enumerate(chunks):
+            e += struct.pack('<H', len(chunks) - k) + c.ljust(14, b'\x00')
+        return bytes(e)
 
     def tree(self, node):
         """node: dict name -> bytes (file) or dict (directory): the root

@@ -11,6 +11,8 @@
 #    unchanged. The Touchpad's filesystem is laid out as on a real one (no
 #    free unit, sequence numbers per region, discard records, regions with
 #    data in all their pages); the others as Goplat describes FlashFX;
+#  - busybox on a CX with the HW-W LCD (240x320, the picture turned): the
+#    same kernel and device tree show a row drawn into /dev/fb0 as a row;
 #  - openwrt: the same two boots on the CX and on the Touchpad (8 MB image),
 #    up to a login shell (with swap in zram and nspire-sleepd running); and
 #    with an image too small for it, which is left
@@ -59,10 +61,11 @@ fail() {
 # the flash image is kept (and saved back) between boots.
 boot() {
 	name=$1 m=$2 initrd=$3 flash=$4 tmo=$5 extra=$6
-	case $m in cx) tty=ttyAMA0;; *) tty=ttyS0;; esac
+	case $m in cx|cxw) tty=ttyAMA0;; *) tty=ttyS0;; esac
+	case $m in cxw) dt=cx;; *) dt=$m;; esac
 	end=$(printf '0x%x' $((INITRD_ADDR + $(wc -c < "$initrd"))))
 	{
-		"$OUT/dtc" -q -I dtb -O dts "$OUT/nspire-$m.dtb"
+		"$OUT/dtc" -q -I dtb -O dts "$OUT/nspire-$dt.dtb"
 		cat <<DTS
 / {
 	chosen {
@@ -175,6 +178,34 @@ SCRIPT
 				fail "busybox $m TI files and pages to leave alone unchanged" "$T/$m-readfs.log"
 			fi
 		done
+
+		# A CX with the HW-W LCD: the controller set by the OS for 240
+		# pixel lines, 320 of them. Row 100 of /dev/fb0 filled in white
+		# has to show as row 100 of the screen.
+		case " ${BOOT_TEST_MODELS:-cx} " in *" cx "*)
+			rm -f "$T/cxw.flash"
+			boot cxw-ram cxw "$initrd" "$T/cxw.flash" 120 "" <<SCRIPT
+!wait nspire:~#
+dmesg | grep -o "240x320 panel.*"; dd if=/dev/zero bs=640 count=1 2>/dev/null | tr '\\0' '\\377' | dd of=/dev/fb0 bs=640 seek=100 2>/dev/null; echo CHECK-\$((40+2))
+!wait CHECK-42
+!delay 1000
+!screenshot $T/cxw-ram.ppm
+!quit 0
+SCRIPT
+			if grep -a -q "^240x320 panel: showing the picture turned" "$LOG" &&
+			   python3 -I - "$T/cxw-ram.ppm" <<'PY' && clean "$LOG"; then
+import sys
+d = open(sys.argv[1], 'rb').read()
+px = d[-320 * 240 * 3:]
+# white: each channel as high as RGB565 takes it
+white = lambda y: min(px[y * 960:(y + 1) * 960]) >= 248
+sys.exit(not (white(100) and not white(99) and not white(101)))
+PY
+				pass "busybox cx with the HW-W LCD from RAM"
+			else
+				fail "busybox cx with the HW-W LCD from RAM" "$LOG"
+			fi
+		esac
 		;;
 	openwrt)
 		initrd=$OUT/openwrt.cpio.gz image=openwrt.img.tns

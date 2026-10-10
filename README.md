@@ -4,6 +4,14 @@ Builds everything needed to run Linux on a TI-Nspire (CX / CX CAS, Touchpad,
 Clickpad): the loader, the kernel, the device trees and a root filesystem,
 and zips the files to copy to the calculator. The CX II is not supported.
 
+CXs from hardware revision W on have a 240x320 panel. The kernel tells it
+from how the TI-Nspire OS left the LCD controller and shows the picture
+turned, with the same files as the other CXs. This has only been tried on
+Firebird's emulation of that panel. Ndless supports these calculators from
+OS 4.2 on, and the TI-Nspire filesystem has only been checked against
+OS 3.6 on real calculators: should the driver find something it does not
+know there, it stays read-only and Linux runs from RAM.
+
 | ZIP | Root filesystem |
 |---|---|
 | `nspire-linux-<kernel>.zip` | Minimal BusyBox system and fastfetch (initrd of about 900 KB) |
@@ -129,7 +137,9 @@ that flash, which shows whether they still accept what Linux wrote.
 directly) the way the loader hands the kernel over (initrd and command line
 in `/chosen`):
 
-- BusyBox variant: each of the three models boots from RAM; then, on a
+- BusyBox variant: each of the three models boots from RAM (and the CX
+  with the HW-W panel, where a row drawn into `/dev/fb0` has to show as a
+  row); then, on a
   TI-Nspire filesystem (FlashFX Pro + Reliance) made by
   `tests/tifs/mkfsimage.py` holding a new, tagged image file as the loader
   creates it, the first boot formats and fills the image, and a second boot

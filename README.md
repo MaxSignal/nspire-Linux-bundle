@@ -152,3 +152,62 @@ The synthetic filesystem follows Hackspire and Goplat's analysis and may
 differ from what is on real calculators. This is why the driver checks the
 spare area layout, the ECC and the file's tags before writing anything, and
 stays read-only when they do not match.
+
+## References
+
+Everything consulted while porting, fixing and testing, by topic.
+
+### TI-Nspire hardware and software
+
+- [Hackspire](https://hackspire.org/) ([sources](https://github.com/beyond-ndless/hackspire.org)):
+  [Memory-mapped I/O ports](https://hackspire.org/index.php/Memory-mapped_I/O_ports),
+  Hardware, Clock speed, Interrupts, Timers, Keypads, GPIO pins,
+  NAND memory layout, Internal filesystem (the FlashFX unit header layout),
+  OS upgrade files, USB protocol, Zehn, Libndls and
+  [Linux](https://hackspire.org/index.php/Linux).
+- Goplat's analysis of FlashFX Pro and Reliance on the TI-Nspire, in the
+  Omnimaga thread "Bypassing TI-Nspire RSA signatures now possible?"
+  ([page 60](https://www.omnimaga.org/news/bypassing-ti-nspire-rsa-signatures-now-possible/60/),
+  [75](https://www.omnimaga.org/news/bypassing-ti-nspire-rsa-signatures-now-possible/75/),
+  [90](https://www.omnimaga.org/news/bypassing-ti-nspire-rsa-signatures-now-possible/90/)).
+- [Firebird](https://github.com/nspire-emus/firebird) sources: the
+  emulated peripherals (NAND controllers, LCD controller, HW-W LCD, PMU,
+  USB), and its flash image format.
+- [Ndless](https://github.com/ndless-nspire/Ndless) sources and SDK: the
+  Zehn format and flags, `lcd_type()`/`lcd_blit()`, and the LCD
+  compatibility mode for HW-W (`lcd_compat.c`).
+- [TI-Nspire OS downloads](https://education.ti.com/en/software/details/en/33AADF01417343C6B4DCA1A8199647F4/ti-nspire_os)
+  (Texas Instruments) and the [TI-Planet archives](https://tiplanet.org/),
+  searched for OS files; the OS files used to restore the test calculators
+  were made from their own flash dumps.
+
+### Linux on the TI-Nspire
+
+- Daniel Tang's TI-Nspire Linux port: [tangrs/linux](https://github.com/tangrs/linux)
+  (`nspire`, `nand` and `nspire-dt` branches), the base of the drivers
+  ported here, and the original [nspire-linux-loader2](https://github.com/tangrs/nspire-linux-loader2).
+- [Vogtinator/linux](https://github.com/Vogtinator/linux), including the
+  [`cxII-clean`](https://github.com/Vogtinator/linux/commits/cxII-clean)
+  branch (CX II support and a panel for HW-W), and
+  [Vogtinator/nspire-linux-configs](https://github.com/Vogtinator/nspire-linux-configs).
+- [nspire-linux-loader2 issue #7, "Support for HW-W"](https://github.com/tangrs/nspire-linux-loader2/issues/7).
+- Cemetech threads: [running Linux on the CX II](https://www.cemetech.net/forum/viewtopic.php?p=295953)
+  and the [full guide to Linux on the TI-Nspire](https://www.cemetech.net/forum/viewtopic.php?p=299183).
+- The mainline kernel ([torvalds/linux](https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git),
+  [stable](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git)):
+  the existing TI-Nspire support, the PL353 NAND controller driver
+  (`pl35x-nand-controller.c`), the PL111 DRM driver, `panel-simple` and
+  the device tree bindings.
+
+### Tools and components
+
+- [n-link](https://lights0123.com/n-link/) and the
+  [libnspire](https://crates.io/crates/libnspire) crate (file transfers
+  to the calculator's OS over USB).
+- [OpenWrt](https://openwrt.org/): the at91/sam9x release
+  [downloads](https://downloads.openwrt.org/releases/), ImageBuilder and
+  [procd](https://git.openwrt.org/project/procd.git).
+- [BusyBox](https://busybox.net/), [fastfetch](https://github.com/fastfetch-cli/fastfetch)
+  and the [Bootlin toolchains](https://toolchains.bootlin.com/) (armv5-eabi, musl).
+- [stepney141/ndless-docker](https://github.com/stepney141/ndless-docker)
+  and Ndless's own CI workflow, for building the Ndless SDK in CI.

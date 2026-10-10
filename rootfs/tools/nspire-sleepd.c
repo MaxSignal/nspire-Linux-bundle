@@ -1,6 +1,7 @@
 /*
- * nspire-sleepd: ctrl+ON puts the calculator to sleep, as in the
- * TI-Nspire OS, and ON wakes it up. Watches the input devices with the ON
+ * nspire-sleepd: as in the TI-Nspire OS, ctrl+ON puts the calculator to
+ * sleep, ON wakes it up, and ctrl with + or - turns the screen's
+ * brightness (the contrast on the classic models) up or down. Watches the input devices with the ON
  * key (KEY_POWER) or a ctrl key, and when ON, pressed while ctrl was held,
  * is let go, turns the screen off and writes "mem" to /sys/power/state:
  * processes and devices stop until the ON key's interrupt wakes the system
@@ -9,9 +10,12 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <linux/input.h>
+#include <linux/kd.h>
+#include <linux/keyboard.h>
 #include <linux/vt.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/klog.h>
@@ -28,7 +32,8 @@ static int has_keys(int fd)
 	if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) < 0)
 		return 0;
 	return BIT_SET(keys, KEY_POWER) || BIT_SET(keys, KEY_LEFTCTRL) ||
-	       BIT_SET(keys, KEY_RIGHTCTRL);
+	       BIT_SET(keys, KEY_RIGHTCTRL) || BIT_SET(keys, KEY_KPPLUS) ||
+	       BIT_SET(keys, KEY_MINUS);
 }
 
 /*
@@ -57,6 +62,61 @@ static void put(const char *path, const char *value)
 		return;
 	if (write(fd, value, strlen(value)) < 0)
 		perror(path);
+	close(fd);
+}
+
+static int get(const char *path)
+{
+	char buf[16] = "";
+	int fd = open(path, O_RDONLY);
+
+	if (fd < 0)
+		return -1;
+	if (read(fd, buf, sizeof(buf) - 1) < 0)
+		buf[0] = 0;
+	close(fd);
+	return atoi(buf);
+}
+
+/* Each backlight a sixteenth of its range up (dir 1) or down (-1) */
+static void brightness(int dir)
+{
+	struct dirent *de;
+	char path[64 + sizeof(de->d_name)], val[16];
+	DIR *dir_bl = opendir("/sys/class/backlight");
+	int max, cur, step;
+
+	while (dir_bl && (de = readdir(dir_bl))) {
+		if (de->d_name[0] == '.')
+			continue;
+		snprintf(path, sizeof(path), "/sys/class/backlight/%s/max_brightness", de->d_name);
+		max = get(path);
+		snprintf(path, sizeof(path), "/sys/class/backlight/%s/brightness", de->d_name);
+		cur = get(path);
+		if (max <= 0 || cur < 0)
+			continue;
+		step = max / 16 > 0 ? max / 16 : 1;
+		cur += dir * step;
+		cur = cur < 0 ? 0 : cur > max ? max : cur;
+		snprintf(val, sizeof(val), "%d", cur);
+		put(path, val);
+	}
+	if (dir_bl)
+		closedir(dir_bl);
+}
+
+/* ctrl with + or - types nothing on the console: they are this program's */
+static void quiet_keys(void)
+{
+	struct kbentry e = { .kb_table = 1 << KG_CTRL, .kb_value = K_HOLE };
+	int fd = open("/dev/tty0", O_RDWR | O_NOCTTY);
+
+	if (fd < 0)
+		return;
+	e.kb_index = KEY_KPPLUS;
+	ioctl(fd, KDSKBENT, &e);
+	e.kb_index = KEY_MINUS;
+	ioctl(fd, KDSKBENT, &e);
 	close(fd);
 }
 
@@ -120,6 +180,7 @@ int main(void)
 		closedir(dir);
 	if (!n)
 		return 1;
+	quiet_keys();
 
 	while (poll(pfd, n, -1) > 0) {
 		for (i = 0; i < n; i++) {
@@ -130,6 +191,9 @@ int main(void)
 					continue;
 				if (ev.code == KEY_LEFTCTRL || ev.code == KEY_RIGHTCTRL)
 					ctrl = ev.value != 0;
+				else if ((ev.code == KEY_KPPLUS || ev.code == KEY_MINUS) &&
+					 ev.value && ctrl)	/* pressed or repeated */
+					brightness(ev.code == KEY_KPPLUS ? 1 : -1);
 				else if (ev.code == KEY_POWER && ev.value == 1)
 					armed = ctrl;
 				else if (ev.code == KEY_POWER && ev.value == 0 && armed) {
